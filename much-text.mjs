@@ -57,6 +57,9 @@ slot {
 #doc:focus .caret {
   opacity:         1;
 }
+#doc.select:focus .caret {
+  opacity:         0;
+}
 .line-selection {
   height:          calc(1em + 1ex);
   backdrop-filter: sepia(60%) invert(100%);
@@ -271,6 +274,7 @@ class MuchText extends HTMLElement {
     this.#elements.doc.addEventListener('click', () => {})
     this.#elements.doc.addEventListener('contextmenu', e => this.#handleContextMenu(e))
     this.#elements.doc.addEventListener('pointerdown', e => this.#handlePointerDown(e))
+    this.#elements.doc.addEventListener('click',       e => this.#handleClick(e))
     this.#elements.doc.addEventListener('pointermove', e => this.#handlePointerMove(e))
     this.#elements.doc.addEventListener('pointerup',   e => this.#handlePointerUp(e))
     this.#elements.doc.addEventListener('keydown',     e => this.#handleKeyDown(e))
@@ -1252,6 +1256,7 @@ class MuchText extends HTMLElement {
       element:     createElement('div', {className: 'selection'}),
     }
     this.#elements.doc.appendChild(this.#selection.element)
+    this.#elements.doc.classList.add('select')
   }
 
   #addLineSelection(lineNumber, offset, from, to) {
@@ -1286,6 +1291,7 @@ class MuchText extends HTMLElement {
     }
   }
 
+  /** Render the selection. Affects DOM and styles. */
   #highlightSelection() {
     const selection = this.#selection
     if(!selection) throw 'no selection'
@@ -1316,12 +1322,14 @@ class MuchText extends HTMLElement {
     if(!selection) throw 'no selection'
     selection.endLine   = this.#caretLine
     selection.endColumn = this.#caretColumn
-    this.#highlightSelection()
+    this.#changed.selection = true
+    this.#scheduleRefresh()
   }
 
   clearSelection() {
     if(!this.#selection) return
     this.#selection.element.remove()
+    this.#elements.doc.classList.remove('select')
     this.#selection = null
   }
 
@@ -1353,6 +1361,29 @@ class MuchText extends HTMLElement {
  
     this.#selection.element.remove()
     this.#selection = null
+  }
+
+  /** Select text within a given range, clobbering any previous selection. */
+  #selectRange(range) {
+    this.#startSelection()
+    this.#selection.startLine = range.startLine
+    this.#selection.startColumn = range.startColumn
+    this.#selection.endLine = range.endLine
+    this.#selection.endColumn = range.endColumn
+    this.#changed.selection = true
+    this.#scheduleRefresh()
+  }
+
+  /** Select a region contained between the nearest whitespace to the caret. */
+  #selectWord() {
+    const row = this.#caretLine
+    const line = this.#lines[row]
+    let from, to
+    for(from = this.#caretColumn; from > 0; from--)
+      if(line.chars[from] == ' ' || line.chars[from] == '\t') break
+    for(to = this.#caretColumn; to < line.chars.length; to++)
+      if(line.chars[to] == ' ' || line.chars[to] == '\t') break
+    this.#selectRange({startLine: row, startColumn: from + 1, endLine: row, endColumn: to})
   }
 
 
@@ -1452,6 +1483,10 @@ class MuchText extends HTMLElement {
       refreshCaret           = true
       refreshSelection       = true
       changed.wrapMode       = false
+    }
+    if(changed.selection) {
+      refreshSelection       = true
+      changed.selection      = false
     }
 
     // ...then do it
@@ -1681,6 +1716,12 @@ class MuchText extends HTMLElement {
     this.#elements.text.setPointerCapture(ev.pointerId)
     this.#changed.caretPosition = true
     this.#scheduleRefresh()
+  }
+
+  /** Handle click events (other than those already handled on pointerdown). */
+  #handleClick(ev) {
+    if(this.#cfgDisabled || ev.detail < 2) return
+    this.#selectWord()
   }
 
   #handlePointerMove(ev) {
