@@ -122,11 +122,16 @@ slot {
 #contextMenu {
   position: absolute;
   width: fit-content;
-  background: white;
+  background: #DCDCDC;
   color: black;
+  cursor: default;
 }
 #contextMenu > div {
-  width: fit-content;
+  height: 1.5em;
+  padding: 0.25em 1.1em;
+}
+#contextMenu > div:hover {
+  background: #ACACAC;
 }
 `
 
@@ -302,7 +307,12 @@ class MuchText extends HTMLElement {
     this.addEventListener('scroll',                    e => this.#handleScroll(e))
     this.#elements.slot.addEventListener('slotchange', e => this.#handleSlotChange(e))
     this.#elements.doc.addEventListener('contextmenu', e => this.#openContextMenu(e))
-    this.#elements.ctxMenu.addEventListener('click',   e => this.#contextMenuClick(e))
+    this.#elements.ctxMenu.addEventListener('click',   e => {})
+    this.#elements.ctxMenu.addEventListener('pointerdown',   e => this.#contextMenuPointerEvent(e))
+    this.#elements.ctxMenu.addEventListener('pointerup',   e => this.#contextMenuPointerEvent(e))
+    this.#elements.ctxCopy.addEventListener('click',   e => this.#contextMenuCopy(e))
+    this.#elements.ctxCut.addEventListener('click',    e => this.#contextMenuCut(e))
+    this.#elements.ctxPaste.addEventListener('click',  e => this.#contextMenuPaste(e))
 
     const resizeObserver = new ResizeObserver(entries => {
       for(let entry of entries) {
@@ -368,8 +378,25 @@ class MuchText extends HTMLElement {
     this.#elements.ctxMenu.remove()
   }
 
-  #contextMenuClick(ev) {
+  #contextMenuPointerEvent(ev) {
+    ev.stopPropagation()
   }
+
+  #contextMenuCopy(ev) {
+    this.#clipboardCopy()
+  }
+
+  #contextMenuCut(ev) {
+    if(this.#cfgReadOnly) 
+      this.#clipboardCopy()
+    else
+      this.#clipboardCut()
+  }
+
+  #contextMenuPaste(ev) {
+    this.#clipboardPaste()
+  }
+
 
 
   /***************************************************************************
@@ -1730,6 +1757,7 @@ class MuchText extends HTMLElement {
     if(this.#ctxMenuOpen) {
       this.#closeContextMenu()
     }
+    if(ev.button != 0) return
     if(this.#cfgDisabled) return
     const tBox = this.#textBox
     const [x, y] = [ev.clientX - tBox.left, ev.clientY - tBox.top]
@@ -1779,6 +1807,7 @@ class MuchText extends HTMLElement {
   }
 
   #handlePointerUp(ev) {
+    if(ev.button != 0) return
     if(this.#isDragging) {
       const sel = this.#selection
       if(sel && sel.startLine == sel.endLine && sel.startColumn == sel.endColumn)
