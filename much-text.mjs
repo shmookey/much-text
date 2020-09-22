@@ -29,7 +29,6 @@ slot {
   user-select:     none;
   position:        relative;
   display:         grid;
-  width:           fit-content;
   outline:         none;
   overflow-x:      hidden;
   grid-auto-rows:  minmax(calc(1em + 1ex), min-content);
@@ -46,6 +45,7 @@ slot {
   overflow-x:      auto;
   white-space:     pre;
   word-break:      normal;
+  width:           fit-content;
 }
 .caret {
   height:          calc(1em + 1ex);
