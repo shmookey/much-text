@@ -1,5 +1,3 @@
-'use strict'
-
 export const MuchText = (() => {
 
 const { ceil, floor, min, max } = Math
@@ -254,6 +252,7 @@ class MuchText extends HTMLElement {
       caret:        createElement('div',   {className: 'caret', part: 'caret'}),
       style:        createElement('style', {textContent: cssSource}),
       slot:         createElement('slot'),
+      textNode:     new Text(),
     }
     this.#elements.doc.append(
       this.#elements.margin,
@@ -261,6 +260,7 @@ class MuchText extends HTMLElement {
       this.#elements.overflowArea, 
       this.#elements.boundary,
       this.#elements.caret)
+    this.append(this.#elements.textNode)
     this.#caretBlink = this.#elements.caret.animate({
       visibility: ['visible', 'hidden', 'hidden'],
     }, {
@@ -378,6 +378,17 @@ class MuchText extends HTMLElement {
     return cH * max(1, ceil(line.chars.length / cols))
   }
 
+  /** Get the vertical position of a visible line, relative to the textBox. */
+  #lineOffset(row) {
+    const vis = this.#visibleRegion
+    if(row < vis.firstLine || row > vis.lastLine) return null
+    let top = -vis.firstLineOverflow
+    for(let i=vis.firstLine; i<row; i++) {
+      top += this.#lineHeight(i)
+    }
+    return top
+  }
+
   /** Find the nearest line/column to a pixel coordinate in the text area. */
   nearestPosition(x, y) {
     let tBox = this.#textBox
@@ -401,6 +412,7 @@ class MuchText extends HTMLElement {
     return [row, col]
   }
 
+  /** Update the textBox geometry. Does not access DOM layout. */
   #recalculateTextBox() {
     const margin   = this.#marginWidth
     const cBox     = this.#contentBox
@@ -930,6 +942,7 @@ class MuchText extends HTMLElement {
    */
   deleteRange(range, moveCaret=true, inputType='deleteContent') {
     const {startLine,startColumn,endLine,endColumn} = range
+    if(startLine==endLine && startColumn==endColumn) return
     const nLines = endLine - startLine
     const offset = this.offsetOf(startLine, startColumn)
     const len = this.rangeLength(startLine, startColumn, endLine, endColumn) 
@@ -1296,7 +1309,6 @@ class MuchText extends HTMLElement {
       this.#addLineSelection(i, offset, left, right)
       left = 0
     }
-    this.#updateCaret()
   }
 
   #selectToCaret() {
@@ -1355,9 +1367,15 @@ class MuchText extends HTMLElement {
   /** Queue an update element following a change in geometry. */ 
   #scheduleRefresh() {
     if(this.#refreshScheduled) return
-    window.queueMicrotask(() => {
-      this.#refresh()
-      this.#refreshScheduled = false
+    //window.queueMicrotask(() => {
+    //  this.#refresh()
+    //  this.#refreshScheduled = false
+    //})
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        this.#refresh()
+        this.#refreshScheduled = false
+      }, 0)
     })
     this.#refreshScheduled = true
   }
@@ -1584,14 +1602,15 @@ class MuchText extends HTMLElement {
     const h = this.#charHeight
     const margin = this.#marginWidth
     const tBox = this.#textBox
+    const top = this.#lineOffset(cL)
     if(cC > tBox.cols && this.#cfgLineWrap) {
       const n = floor(cC / tBox.cols)
       const rem = cC % tBox.cols
       this.#elements.caret.style.left = `calc(${margin}px + ${rem}ch)`
-      this.#elements.caret.style.top = `${ln.offsetTop + n*h}px` //`calc(${cL} * (1em + 1ex))`
+      this.#elements.caret.style.top = `${top + n*h}px` //`calc(${cL} * (1em + 1ex))`
     } else if(ln) {
       this.#elements.caret.style.left = `calc(${margin}px + ${cC}ch)`
-      this.#elements.caret.style.top = `${ln.offsetTop}px` //`calc(${cL} * (1em + 1ex))`
+      this.#elements.caret.style.top = `${top}px` //`calc(${cL} * (1em + 1ex))`
     }
     // Make sure the caret is not in the invisble part of its blink cycle
     this.#caretBlink.cancel()
@@ -1748,6 +1767,7 @@ class MuchText extends HTMLElement {
 
   #handleSlotChange(ev) {
     this.#elements.textNode = this.childNodes[0]
+    
     if(this.#updatedSlot) {
       this.#updatedSlot = false
       console.log('ignoring self-update')
