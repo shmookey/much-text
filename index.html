@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<script src='much-text.mjs' type='module'></script>
+<script src='annotate-markdown.js'></script>
+<style>
+* {
+  box-sizing: border-box;
+}
+body {
+  width: 100vw;
+  height: 100vh;
+  background: #222022;
+  margin: 0;
+  display: flex;
+  color: #DFDCDF;
+  align-items: stretch;
+}
+much-text {
+  width: calc(100% - 300px);
+  margin: 20px;
+}
+#panel {
+  width: 300px;
+  min-width: 300px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px;
+}
+#panel .heading, #panel .title, #panel label {
+  user-select: none;
+}
+#panel .heading {
+  font-size: 1.2em;
+  font-weight: bold;
+  margin-top: 30px;
+  margin-bottom: 15px;
+  align-self: flex-start;
+}
+#panel .title {
+  font-size: 2em;
+  font-weight: bold;
+  margin: 50px 0;
+}
+#panel .settings {
+  display: grid;
+  width: 90%;
+  grid-template-columns: 2fr 1fr;
+  grid-auto-flow: dense;
+  row-gap: 10px;
+}
+#panel .settings label {
+  grid-column: 1;
+}
+#panel .settings input, #panel .settings select {
+  grid-column: 2;
+  width: inherit;
+}
+#example {
+  white-space: break-spaces;
+  word-break: break-all;
+  border: 1px dashed #DFDCDF;
+  padding: 5px;
+  font-size: 8pt;
+}
+/* dark theme */
+much-text {
+  background: #2A2A2A;
+  color: #DFDCDF;
+  outline: none; 
+}
+much-text::-webkit-scrollbar {
+  background: #2A2A2A;
+}
+much-text::-webkit-scrollbar-thumb {
+  background: #707070;
+}
+much-text::-webkit-scrollbar-corner {
+  background: #2A2A2A;
+}
+much-text::part(active-line) {
+  background: #444044;
+}
+much-text::part(caret) {
+  border-left: 2px solid #DFDCDF;
+}
+
+/* markdown-like highlighting */
+much-text::part(italic) {
+  font-style: italic;
+}
+much-text::part(bold) {
+  font-weight: bold;
+  color: #AFACAF;
+}
+much-text::part(html-tag) {
+  font-weight: bold;
+  color: #CF7C1F;
+}
+much-text::part(heading-1) {
+  font-weight: bold;
+  color: #FFEEFF;
+}
+much-text::part(heading-2) {
+  font-weight: bold;
+  color: #BFBCBF;
+}
+much-text::part(code) {
+  background: linear-gradient(to right, #44404400 0.5ch, #000000 1ch, #000000 calc(100% - 1ch), #44404400 calc(100% - 0.5ch));
+  color:      #FEFE5E;
+  height:     calc(1em + 1ex);
+  display:    inline-block;
+}
+
+/* splash screen */
+#splash {
+  z-index: 1;
+  position: absolute;
+  left: 0;
+  width: 100vw;
+  top: 0;
+  height: 100vh;
+  background: #2A2A2A;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#splash .error {
+  display: none;
+  width: 50%;
+  max-width: 500px;
+  min-width: 300px;
+}
+</style>
+<script>
+'use strict'
+let DEBUG = false
+let eInput = null
+let MuchText = null
+let moduleLoad = null
+try {
+  moduleLoad = import('./much-text.mjs')
+} catch(e) {
+  console.log(e)
+}
+window.onload = () => {
+  eInput = document.querySelector('much-text')
+  const eSplash = document.querySelector('#splash')
+  const eError = document.querySelector('#splash .error')
+  const eExample = document.querySelector('#example')
+  const eWrapMode = document.querySelector('#panel select[name="wrap"]')
+  const eLineNums = document.querySelector('#panel select[name="line-nums"]')
+  const eAltLines = document.querySelector('#panel select[name="line-contrast"]')
+  const eReadOnly = document.querySelector('#panel select[name="read-only"]')
+  const eDisabled = document.querySelector('#panel select[name="disabled"]')
+  const eCols     = document.querySelector('#panel input[name="cols"]')
+  const eShowBoundary = document.querySelector('#panel select[name="show-boundary"]')
+  eWrapMode.addEventListener('change', ev => {
+    eInput.wrap = eWrapMode.value
+    updateExample()
+  })
+  eLineNums.addEventListener('change', ev => {
+    eInput.lineNums = eLineNums.value
+    updateExample()
+  })
+  eAltLines.addEventListener('change', ev => {
+    eInput.lineContrast = eAltLines.value
+    updateExample()
+  })
+  eReadOnly.addEventListener('change', ev => {
+    eInput.readonly = eReadOnly.value == 'true'
+    updateExample()
+  })
+  eDisabled.addEventListener('change', ev => {
+    eInput.disabled = eDisabled.value == 'true'
+    updateExample()
+  })
+  eCols.addEventListener('change', ev => {
+    eInput.cols = eCols.value
+    updateExample()
+  })
+  eShowBoundary.addEventListener('change', ev => {
+    eInput.showBoundary = eShowBoundary.value
+    updateExample()
+  })
+
+
+  function updateExample() {
+    const attrs = []
+    if(eInput.wrap == 'soft')
+      attrs.push('wrap="soft"')
+    if(eInput.lineNums == 'on')
+      attrs.push('line-nums="on"')
+    if(eInput.readOnly == 'true')
+      attrs.push('read-only="true"')
+    if(eInput.disabled == 'true')
+      attrs.push('disabled="true"')
+    if(eInput.cols != 'auto')
+      attrs.push(`cols="${eInput.cols}"`)
+    if(eInput.lineContrast != 'off')
+      attrs.push(`line-contrast="${eInput.lineContrast}"`)
+    if(eInput.showBoundary == 'column')
+      attrs.push('show-boundary="column"')
+    eExample.innerText = `<much-text ${attrs.join(' ')}></much-text>`
+  }
+
+  function checkFeatureAvailability(x) {
+    if( 
+     !window.ResizeObserver ||
+     !document.elementsFromPoint ||
+     !window.customElements
+     ) throw 'Unsupported'
+    return x
+  } 
+
+  if(!moduleLoad) moduleLoad = promise.reject()
+  moduleLoad.then(checkFeatureAvailability).then(module => {
+    MuchText = module.MuchText
+    eSplash.remove()
+    eWrapMode.value = eInput.wrap
+    eLineNums.value = eInput.lineNums
+    eAltLines.value = eInput.lineContrast
+    eReadOnly.value = eInput.readonly.toString()
+    eDisabled.value = eInput.disabled.toString()
+    eCols.value     = eInput.cols.toString()
+    eShowBoundary.value = eInput.showBoundary
+//    eInput.focus()
+    updateExample()
+
+    function highlight(region) {
+      const result = annotate(eInput.textContent, region)
+      const ranges = result.ranges
+      ranges.sort(MuchText.compareRanges)
+      const nRanges = ranges.length
+      const nHidden = ranges.filter(x => x.hidden).length
+      if(DEBUG) console.log(`[annotator] parse results: ${nRanges} annotations (${nHidden} hidden) in range ${formatRange(result.region)}`)
+      if(DEBUG) console.log(result)
+      eInput.replaceMarkings(result.region, ranges)
+    }
+    highlight()
+
+    eInput.addEventListener('input', ev => {
+      if(DEBUG) console.log(`[annotator] input detected at ${formatRange(ev.affectedRange)}`)
+      if(DEBUG) console.log(`[annotator] reprocessing extended range ${formatRange(ev.extendedRange)}`)
+      highlight(ev.extendedRange)
+    })
+  }, err => {
+    eError.style.display = 'block'
+  })
+}
+</script>
+<div id='splash'>
+  <div class='error'>
+    This is a demonstration page for much-text, a web component for text editors. 
+    Unfortunately, your browser does not support all of the web platform features that much-text relies on.
+  </div>
+</div>
+<much-text 
+  tabindex='0'
+  autofocus='true'
+  wrap='soft'
+  line-nums='on'
+  line-contrast='lines'
+  cols='100'
+  show-boundary='column'
+>much-text - text area for code
+==============================
+
+
+#    SUMMARY
+
+&lt;much-text&gt; is a web component for monospaced, multi-line text entry, with
+features useful for building text editors for programming languages and markup.
+It works as a drop-in replacement for the &lt;textarea&gt; HTML element and is
+ethically programmed to be conscientious about performance and memory use.
+
+This page provides an easy way to experiment with much-text's features, which
+are configured by HTML attributes. Neither the "dark mode" theme in use here,
+nor the markdown-like syntax highlighting are part of much-text itself, see the
+STYLING and SYNTAX HIGHLIGHTING sections below for details.
+
+much-text is written in JavaScript using native web platform interfaces, not all
+of which are yet widely available even in "evergreen" browsers. It has no
+runtime or build dependencies and does not make use of polyfills or any other
+bridging tools to provide compatibility with older browsers, therefore it isn't.
+It is also a work in progress and some of the details described herein may be
+regarded as "aspirational". 
+
+Features:
+  - Line numbers
+  - Annotations
+
+Limitations:
+  - No mobile support
+  - No native spellcheck
+
+Use it by saving much-text.js somewhere convenient and include it in your page
+using a &lt;script&gt; tag. You can also import it as an ES6 module, or any
+other loading mechanism you may already be using. The custom element registers
+itself automatically, and the script doesn't export any values.
+
+In many ways &lt;much-text&gt; looks and behaves like &lt;textarea&gt;. It implements
+the same attributes and the same DOM interface, emits the same events and takes
+on the same styles. *Consult the documentation for &lt;textarea&gt; for basic usage
+information.* The ways that much-text extends and occasionally deviates from
+this basic functionality is set out in the sections to follow.
+
+
+#    ATTRIBUTES
+
+much-text generally supports all of the global attributes that it inherits from
+the HTMLElement interface. Implementing all standard attributes for &lt;textarea&gt;
+is a work in progress. At time of writing, the following standard attributes
+are available:
+
+  cols disabled readonly wrap
+
+The following standard attributes are planned but not yet implemented:
+
+  form name placeholder required rows
+
+Support for these standard attributes is not currently planned:
+
+  autocomplete maxlength minlength spellcheck
+
+All attributes are also available in JavaScript as properties of the `MuchText`
+DOM interface. Attribute names written in kebab-case are accessed as properties
+using camelCase. Properties take the same string values as attributes, with
+the exception of numbers and boolean values, which are represented with their
+proper types in JavaScript.
+
+The following new attributes are defined:
+
+  line-nums      Show line numbers in the margin.
+                 Values: on, off
+
+  line-contrast  Use an alternating dimming effect to make lines clearer. Lines
+                 can mean logical lines of text (may be taller if wrapped), or
+                 visual 'rows' that are always 1 character tall.
+                 Values: lines, rows, off
+
+  show-boundary  Show a line at the boundary specified by the `cols` or `rows`
+                 attribute.
+                 Values: column, off
+
+
+#    STYLING
+
+You can style much-text with CSS the same way as a regular &lt;textarea&gt;. All
+internal UI elements are made available for styling as CSS Shadow Parts, using
+the ::part(name) pseudo-element. The following parts are defined:
+
+  doc            An internal container for the whole element.
+  caret          The blinking cursor.
+  line           Every (logical) line of text, taller if the line is wrapped.
+  margin         Area to the left of the text content, containing line numbers.
+  text           Area to the right of the margin, containing user text.
+  line-number    Self-described.
+  line-selection One line of a text selection.
+  active-line    Line where caret is currently located.
+  boundary       Column boundary line specified by `cols`.
+  mark-{x}       Highlighted span of text with user-supplied class x.
+
+
+#    WRITING ANNOTATORS
+
+much-text does not implement syntax highlighting directly. Functions to "mark"
+ranges of text with a CSS class (technically, a CSS *part*) are available on
+the MuchText DOM interface in JavaScript. You can listen for the 'input' event
+to trigger updates, and style the resulting output from your existing CSS. If
+you mark a range of text with the class 'foo', you can style it using the
+pseudo-selector `::part(mark-foo)` on the much-text element.
+
+Markings are based on line and column numbers and are "sticky", meaning that
+inserting or deleting characters into marked text will expand or contract the
+associated range. *Markings are **allowed* to overlap**, and much-text will
+work out the optimal way of representing the overlap with HTML span elements.
+
+The following functions are available:
+
+  mark(startLine, startColumn, endLine, endColumn, cls)
+    Marks a range of text with the class `cls`.
+
+  clearMarkings(startLine, endLine)
+    Clears all markings that *start* in the range spanning from `startLine` to
+    `endLine`, inclusive. If either parameter is not given or `null`, the start
+    and end of the document are used.
+
+
+#    DIFFERENCES FROM &lt;textarea&gt;
+
+These are ways in which much-text is deliberately different to the classic
+textarea. Any other deviant behaviour is an offence to decency and must be
+stamped out - it is, in other words, a bug.
+
+- much-text uses a monospaced font by default and does not support variable-
+  width fonts. However, it does not actively prevent you from using one. Do so
+  at your own peril. At this stage, much-text is exclusively targeting code
+  editors.
+ 
+- The default wrapping mode will break lines at the column they overflow, not
+  at the nearest word boundary or hyphen. You can restore the word-boundary
+  wrapping behaviour using the `white-space` and `word-break` CSS properties on
+  the `::part(line)` pseudo-element.
+
+- A &lt;much-text&gt; element has no intrinsic size, its dimensions are determined
+  solely by the styles applied to it. The only effect of the `cols` attribute
+  is on wrapping and the placement of the boundary line, if enabled. Setting
+  `cols='auto'` in conjunction with line wrapping will cause wrapping to occur
+  at the edge of the element, for whatever width it happens to be.
+
+
+#    KNOWN ISSUES
+
+- Doesn't work on firefox (no private class fields yet)
+- Ignored by form elements
+- Styling margin width breaks layout
+- inputType on events not always accurate
+- Not implemented: graceful degradation
+- Not implemented: context menu
+- Not implemented: tabs
+- Not implemented: row-based keyboard navigation
+- Not implemented: "hard" wrapping mode
+
+</much-text>
+<div id='panel'>
+  <div class='title'>much-text</div>
+  <div class='heading'>Options</div>
+  <div class='settings'>
+    <label>Wrap lines</label>
+    <select name='wrap'>
+      <option>soft</option>
+      <option>off</option>
+    </select>
+    <label>Show line numbers</label>
+    <select name='line-nums'>
+      <option>on</option>
+      <option>off</option>
+    </select>
+    <label>Line contrast</label>
+    <select name='line-contrast'>
+      <option>lines</option>
+      <option>rows</option>
+      <option>off</option>
+    </select>
+    <label>Read only</label>
+    <select name='read-only'>
+      <option>true</option>
+      <option>false</option>
+    </select>
+    <label>Disabled</label>
+    <select name='disabled'>
+      <option>true</option>
+      <option>false</option>
+    </select>
+    <label>Columns</label>
+    <input type='text' name='cols' value='80' />
+    <label>Show boundary</label>
+    <select name='show-boundary'>
+      <option>column</option>
+      <option>off</option>
+    </select>
+  </div>
+  <div class='heading'>HTML</div>
+  <pre id='example'></pre>
+</div>
