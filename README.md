@@ -1,6 +1,11 @@
 much-text - text area for code
 ==============================
 
+This README is intended to be read from the much-text demo page: 
+
+  https://shmookey.github.io/much-text/
+
+
 
 #    SUMMARY
 
