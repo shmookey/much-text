@@ -230,7 +230,10 @@ window.onload = async () => {
     eDisabled.value = eInput.disabled.toString()
     eCols.value     = eInput.cols.toString()
     eShowBoundary.value = eInput.showBoundary
-    const text = await readmePromise
+    let text = await readmePromise
+    const lines = text.split('\n')
+    lines.splice(2, 6)
+    text = lines.join('\n')
     eInput.setText(text)
 //    eInput.focus()
     updateExample()
