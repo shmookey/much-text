@@ -123,14 +123,17 @@ slot {
   position: absolute;
   width: fit-content;
   background: #DCDCDC;
-  color: black;
   cursor: default;
+  color: #808080;
 }
 #contextMenu > div {
   height: 1.5em;
   padding: 0.25em 1.1em;
 }
-#contextMenu > div:hover {
+#contextMenu > div.enabled {
+  color: #101010;
+}
+#contextMenu > div.enabled:hover {
   background: #ACACAC;
 }
 `
@@ -370,6 +373,14 @@ class MuchText extends HTMLElement {
     ctxMenu.style.top = `${y}px`
     this.#ctxMenuOpen = true
     this.#elements.doc.append(ctxMenu)
+    this.#elements.ctxPaste.classList.add('enabled')
+    if(this.#selection) {
+      this.#elements.ctxCopy.classList.add('enabled')
+      this.#elements.ctxCut .classList.add('enabled')
+    } else { 
+      this.#elements.ctxCopy.classList.remove('enabled')
+      this.#elements.ctxCut .classList.remove('enabled')
+    }
     ctxMenu.focus()
   }
 
@@ -383,10 +394,12 @@ class MuchText extends HTMLElement {
   }
 
   #contextMenuCopy(ev) {
+    if(!this.#elements.ctxCopy.classList.contains('enabled')) return
     this.#clipboardCopy()
   }
 
   #contextMenuCut(ev) {
+    if(!this.#elements.ctxCut.classList.contains('enabled')) return
     if(this.#cfgReadOnly) 
       this.#clipboardCopy()
     else
@@ -394,6 +407,7 @@ class MuchText extends HTMLElement {
   }
 
   #contextMenuPaste(ev) {
+    if(!this.#elements.ctxPaste.classList.contains('enabled')) return
     this.#clipboardPaste()
   }
 
