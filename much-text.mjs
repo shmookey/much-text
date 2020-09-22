@@ -186,16 +186,7 @@ class MuchInputEvent extends InputEvent {
 }
 
 class MuchText extends HTMLElement {
-  // Configuration
-  #cfgLineWrap     = true
-  #cfgLineNums     = false
-  #cfgAltLines     = 'off'
-  #cfgDisabled     = false
-  #cfgReadOnly     = false
-  #cfgShowBoundary = true
-  #cfgRows         = null
-  #cfgCols         = null
-  // UI state
+  #config
   #lines
   #selection
   #visibleRegion
@@ -223,6 +214,15 @@ class MuchText extends HTMLElement {
 
   constructor() {
     super()
+    this.#config = {
+      lineWrap     : true,
+      lineNums     : false,
+      altLines     : 'off',
+      disabled     : false,
+      readOnly     : false,
+      showBoundary : true,
+      cols         : null,
+    }
     this.ranges = []
     this.#lines = [{
       chars:   [],
@@ -353,6 +353,7 @@ class MuchText extends HTMLElement {
 
   get debug() {
     return {
+      config:           this.#config,
       lines:            this.#lines,
       elements:         this.#elements,
       selection:        this.#selection, 
@@ -400,7 +401,7 @@ class MuchText extends HTMLElement {
 
   #contextMenuCut(ev) {
     if(!this.#elements.ctxCut.classList.contains('enabled')) return
-    if(this.#cfgReadOnly) 
+    if(this.#config.readOnly) 
       this.#clipboardCopy()
     else
       this.#clipboardCut()
@@ -456,7 +457,7 @@ class MuchText extends HTMLElement {
   #lineHeight(row) {
     const cH   = this.#charHeight
     const cols = this.#textBox.cols
-    const wrap = this.#cfgLineWrap
+    const wrap = this.#config.lineWrap
     const line = this.#lines[row]
     if(!line) return null
     if(!wrap) return cH
@@ -504,9 +505,9 @@ class MuchText extends HTMLElement {
     const left     = cBox.left + margin
     const height   = cBox.height
     const maxWidth = cBox.width - margin
-    const width    = this.#cfgCols == null
+    const width    = this.#config.cols == null
                      ? maxWidth
-                     : min(maxWidth, this.#cfgCols * this.#charWidth)
+                     : min(maxWidth, this.#config.cols * this.#charWidth)
     const tBox = {
       top:      cBox.top,
       bottom:   cBox.bottom,
@@ -684,7 +685,7 @@ class MuchText extends HTMLElement {
   }
 
   get cols() {
-    return this.#cfgCols == null ? 'auto' : this.#cfgCols
+    return this.#config.cols == null ? 'auto' : this.#config.cols
   }
 
   set cols(x) {
@@ -699,7 +700,7 @@ class MuchText extends HTMLElement {
   }
 
   get wrap() {
-    return this.#cfgLineWrap ? 'soft' : 'off'
+    return this.#config.lineWrap ? 'soft' : 'off'
   }
 
   set wrap(x) {
@@ -712,7 +713,7 @@ class MuchText extends HTMLElement {
   }
 
   get lineNums() {
-    return this.#cfgLineNums ? 'on' : 'off'
+    return this.#config.lineNums ? 'on' : 'off'
   }
 
   set lineNums(x) {
@@ -725,7 +726,7 @@ class MuchText extends HTMLElement {
   }
 
   get lineContrast() {
-    return this.#cfgAltLines
+    return this.#config.altLines
   }
 
   set lineContrast(x) {
@@ -740,7 +741,7 @@ class MuchText extends HTMLElement {
   }
 
   get disabled() {
-    return this.#cfgDisabled
+    return this.#config.disabled
   }
 
   set disabled(x) {
@@ -751,7 +752,7 @@ class MuchText extends HTMLElement {
   }
 
   get readonly() {
-    return this.#cfgReadOnly
+    return this.#config.readOnly
   }
 
   set readonly(x) {
@@ -762,7 +763,7 @@ class MuchText extends HTMLElement {
   }
 
   get showBoundary() {
-    return this.#cfgShowBoundary ? 'column' : 'off'
+    return this.#config.showBoundary ? 'column' : 'off'
   }
 
   set showBoundary(x) {
@@ -789,19 +790,19 @@ class MuchText extends HTMLElement {
     } else {
       this.#elements.doc.classList.remove('show-boundary')
     }
-    this.#cfgShowBoundary = state
+    this.#config.showBoundary = state
   }
 
   #enableLineWrap() {
     this.#elements.doc.classList.remove('no-wrap')
-    this.#cfgLineWrap = true
+    this.#config.lineWrap = true
     this.#changed.wrapMode = true
     this.#scheduleRefresh()
   }
 
   #disableLineWrap() {
     this.#elements.doc.classList.add('no-wrap')
-    this.#cfgLineWrap = false
+    this.#config.lineWrap = false
     this.#changed.wrapMode = true
     this.#scheduleRefresh()
   }
@@ -810,7 +811,7 @@ class MuchText extends HTMLElement {
     this.#elements.doc.classList.add('show-line-nums')
     this.#elements.margin.style.display = 'contents'
     this.#marginWidth = 50
-    this.#cfgLineNums = true
+    this.#config.lineNums = true
     if(this.#selection) this.#highlightSelection()
     this.#changed.marginWidth = true
     this.#scheduleRefresh()
@@ -820,7 +821,7 @@ class MuchText extends HTMLElement {
     this.#elements.doc.classList.remove('show-line-nums')
     this.#elements.margin.style.display = 'none'
     this.#marginWidth = 5
-    this.#cfgLineNums = false
+    this.#config.lineNums = false
     if(this.#selection) this.#highlightSelection()
     this.#changed.marginWidth = true
     this.#scheduleRefresh()
@@ -834,21 +835,21 @@ class MuchText extends HTMLElement {
       this.#elements.doc.classList.remove('alternating-lines')
       this.#elements.doc.classList.add('alternating-rows')
     }
-    this.#cfgAltLines = useLines ? 'lines' : 'rows'
+    this.#config.altLines = useLines ? 'lines' : 'rows'
   }
 
   #disableLineContrast() {
     this.#elements.doc.classList.remove('alternating-lines')
     this.#elements.doc.classList.remove('alternating-rows')
-    this.#cfgAltLines = 'off'
+    this.#config.altLines = 'off'
   }
 
   #setReadOnly(state) {
-    this.#cfgReadOnly = state
+    this.#config.readOnly = state
   }
 
   #setDisabled(state) {
-    this.#cfgDisabled = state
+    this.#config.disabled = state
     if(state)
       this.#elements.doc.classList.add('disabled')
     else
@@ -857,7 +858,7 @@ class MuchText extends HTMLElement {
   }
 
   #setCols(state) {
-    this.#cfgCols = state
+    this.#config.cols = state
     this.#changed.cols = true
     this.#scheduleRefresh()
   }
@@ -1348,7 +1349,7 @@ class MuchText extends HTMLElement {
     const width = this.#textBox.cols
     const margin = this.#marginWidth
 
-    if(to <= width || !this.#cfgLineWrap) {
+    if(to <= width || !this.#config.lineWrap) {
       const e = createElement('div', {className: 'line-selection'})
       e.style.top   = `calc(${offset.top}px + ${offset.row}*(1em + 1ex))`
       e.style.left  = `calc(${margin}px + ${from}ch)`
@@ -1591,7 +1592,7 @@ class MuchText extends HTMLElement {
   #updateStyles() {
     const style  = this.#elements.doc.style
     const margin = this.#marginWidth
-    const wrap   = this.#cfgLineWrap
+    const wrap   = this.#config.lineWrap
     const cBox   = this.#contentBox
     const tBox   = this.#textBox
 
@@ -1719,7 +1720,7 @@ class MuchText extends HTMLElement {
     const margin = this.#marginWidth
     const tBox = this.#textBox
     const top = ln.offsetTop // this.#lineOffset(cL)
-    if(cC > tBox.cols && this.#cfgLineWrap) {
+    if(cC > tBox.cols && this.#config.lineWrap) {
       const n = floor(cC / tBox.cols)
       const rem = cC % tBox.cols
       this.#elements.caret.style.left = `calc(${margin}px + ${rem}ch)`
@@ -1772,7 +1773,7 @@ class MuchText extends HTMLElement {
       this.#closeContextMenu()
     }
     if(ev.button != 0) return
-    if(this.#cfgDisabled) return
+    if(this.#config.disabled) return
     const tBox = this.#textBox
     const [x, y] = [ev.clientX - tBox.left, ev.clientY - tBox.top]
     const [line, column] = this.nearestPosition(x, y)
@@ -1806,7 +1807,7 @@ class MuchText extends HTMLElement {
   /** Handle click events (other than those already handled on pointerdown). */
   #handleClick(ev) {
     if(this.#ctxMenuOpen) this.#closeContextMenu()
-    else if(this.#cfgDisabled || ev.detail < 2) return
+    else if(this.#config.disabled || ev.detail < 2) return
     else this.#selectWord()
   }
 
@@ -1843,7 +1844,7 @@ class MuchText extends HTMLElement {
   }
 
   #handleFocus(ev) {
-    if(this.#cfgDisabled) {
+    if(this.#config.disabled) {
       this.blur()
     } else {
       this.#isFocused = true
@@ -1915,14 +1916,14 @@ class MuchText extends HTMLElement {
 
 
   #keyEnter(ev) {
-    if(this.#cfgReadOnly) return
+    if(this.#config.readOnly) return
     if(this.#selection)
       this.deleteSelection()
     this.insert('\n')
   }
 
   #keyBackspace(ev) {
-    if(this.#cfgReadOnly) return
+    if(this.#config.readOnly) return
     if(this.#selection) {
       this.deleteSelection()
       return
@@ -2013,7 +2014,7 @@ class MuchText extends HTMLElement {
   }
 
   #keyModX(ev) {
-    if(this.#cfgReadOnly) 
+    if(this.#config.readOnly) 
       this.#clipboardCopy()
     else
       this.#clipboardCut()
@@ -2044,7 +2045,7 @@ class MuchText extends HTMLElement {
   }
 
   #keyTextInput(ev) {
-    if(this.#cfgReadOnly) return 
+    if(this.#config.readOnly) return 
     if(this.#selection) this.deleteSelection()
     this.insert(ev.key)
   }
