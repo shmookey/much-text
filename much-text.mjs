@@ -119,6 +119,15 @@ slot {
 #doc.alternating-lines.no-wrap {
   background: repeating-linear-gradient(to bottom, #2F2D2F 0px, #2F2D2F 20px, #2A2A2A 20px, #2A2A2A 40px);
 }
+#contextMenu {
+  position: absolute;
+  width: fit-content;
+  background: white;
+  color: black;
+}
+#contextMenu > div {
+  width: fit-content;
+}
 `
 
 function createElement(tagName, props=null) {
@@ -185,6 +194,7 @@ class MuchText extends HTMLElement {
   #elements
   #changed
   #refreshScheduled
+  #ctxMenuOpen
   #isDragging  = false
   #isFocused   = false
   #caretLine   = 0
@@ -235,6 +245,7 @@ class MuchText extends HTMLElement {
       lastColOverflow:   0,
     }
     this.#refreshScheduled = false
+    this.#ctxMenuOpen = false
     this.#changed = {
       contentBox:    false,
       textBox:       false,
@@ -255,8 +266,17 @@ class MuchText extends HTMLElement {
       caret:        createElement('div',   {className: 'caret', part: 'caret'}),
       style:        createElement('style', {textContent: cssSource}),
       slot:         createElement('slot'),
+      ctxMenu:      createElement('div',   {id: 'contextMenu', part: 'contextMenu'}),
+      ctxCut:       createElement('div',   {className: 'cut', textContent: 'Cut'}),
+      ctxCopy:      createElement('div',   {className: 'copy', textContent: 'Copy'}),
+      ctxPaste:     createElement('div',   {className: 'paste', textContent: 'Paste'}),
       textNode:     new Text(),
     }
+    this.#elements.ctxMenu.append(
+      this.#elements.ctxCut,
+      this.#elements.ctxCopy,
+      this.#elements.ctxPaste,
+    )
     this.#elements.doc.append(
       this.#elements.margin,
       this.#elements.text,
@@ -272,7 +292,6 @@ class MuchText extends HTMLElement {
     })
     this.#elements.text.appendChild(this.#lines[0].element)
     this.#elements.doc.addEventListener('click', () => {})
-    this.#elements.doc.addEventListener('contextmenu', e => this.#handleContextMenu(e))
     this.#elements.doc.addEventListener('pointerdown', e => this.#handlePointerDown(e))
     this.#elements.doc.addEventListener('click',       e => this.#handleClick(e))
     this.#elements.doc.addEventListener('pointermove', e => this.#handlePointerMove(e))
@@ -280,8 +299,10 @@ class MuchText extends HTMLElement {
     this.#elements.doc.addEventListener('keydown',     e => this.#handleKeyDown(e))
     this.#elements.doc.addEventListener('focus',       e => this.#handleFocus(e))
     this.#elements.doc.addEventListener('blur',        e => this.#handleBlur(e))
-    this.addEventListener('scroll',                   e => this.#handleScroll(e))
+    this.addEventListener('scroll',                    e => this.#handleScroll(e))
     this.#elements.slot.addEventListener('slotchange', e => this.#handleSlotChange(e))
+    this.#elements.doc.addEventListener('contextmenu', e => this.#openContextMenu(e))
+    this.#elements.ctxMenu.addEventListener('click',   e => this.#contextMenuClick(e))
 
     const resizeObserver = new ResizeObserver(entries => {
       for(let entry of entries) {
@@ -330,6 +351,25 @@ class MuchText extends HTMLElement {
     }
   }
 
+  #openContextMenu(ev) {
+    ev.preventDefault()
+    const x = ev.clientX - this.#contentBox.left
+    const y = ev.clientY - this.#contentBox.top
+    const ctxMenu = this.#elements.ctxMenu
+    ctxMenu.style.left = `${x}px`
+    ctxMenu.style.top = `${y}px`
+    this.#ctxMenuOpen = true
+    this.#elements.doc.append(ctxMenu)
+    ctxMenu.focus()
+  }
+
+  #closeContextMenu() {
+    this.#ctxMenuOpen = false
+    this.#elements.ctxMenu.remove()
+  }
+
+  #contextMenuClick(ev) {
+  }
 
 
   /***************************************************************************
@@ -1637,7 +1677,7 @@ class MuchText extends HTMLElement {
     const h = this.#charHeight
     const margin = this.#marginWidth
     const tBox = this.#textBox
-    const top = this.#lineOffset(cL)
+    const top = ln.offsetTop // this.#lineOffset(cL)
     if(cC > tBox.cols && this.#cfgLineWrap) {
       const n = floor(cC / tBox.cols)
       const rem = cC % tBox.cols
@@ -1687,6 +1727,9 @@ class MuchText extends HTMLElement {
 
 
   #handlePointerDown(ev) {
+    if(this.#ctxMenuOpen) {
+      this.#closeContextMenu()
+    }
     if(this.#cfgDisabled) return
     const tBox = this.#textBox
     const [x, y] = [ev.clientX - tBox.left, ev.clientY - tBox.top]
@@ -1713,15 +1756,16 @@ class MuchText extends HTMLElement {
     }
 
     this.#isDragging = true
-    this.#elements.text.setPointerCapture(ev.pointerId)
+    //this.#elements.text.setPointerCapture(ev.pointerId)
     this.#changed.caretPosition = true
     this.#scheduleRefresh()
   }
 
   /** Handle click events (other than those already handled on pointerdown). */
   #handleClick(ev) {
-    if(this.#cfgDisabled || ev.detail < 2) return
-    this.#selectWord()
+    if(this.#ctxMenuOpen) this.#closeContextMenu()
+    else if(this.#cfgDisabled || ev.detail < 2) return
+    else this.#selectWord()
   }
 
   #handlePointerMove(ev) {
@@ -1739,7 +1783,7 @@ class MuchText extends HTMLElement {
       const sel = this.#selection
       if(sel && sel.startLine == sel.endLine && sel.startColumn == sel.endColumn)
         this.clearSelection()
-      this.#elements.text.releasePointerCapture(ev.pointerId)
+    //  this.#elements.text.releasePointerCapture(ev.pointerId)
     }
     this.#isDragging = false
   }
