@@ -31,8 +31,12 @@ const cssSource = `
   display:         block;
   appearance:      textfield;
   border:          1px solid #707070;
-  font-family:     monospace;
   overflow:        auto auto;
+  /*font-family:     Consolas,Monaco,Lucida Console,Liberation Mono,DejaVu Sans Mono,Bitstream Vera Sans Mono,Courier New, monospace, serif;*/
+  font-family:     monospace;
+  font-kerning:    none;
+  hanging-punctuation: none;
+  font-variant-numeric: tabular-nums;
 }
 slot {
   display:         none;
@@ -46,8 +50,11 @@ slot {
   overflow-x:      hidden;
   grid-auto-rows:  minmax(calc(1em + 1ex), min-content);
   grid-auto-flow:  dense;
+  overflow-wrap:   anywhere;
   white-space:     break-spaces;
   word-break:      break-all;
+  line-break:      anywhere;
+  hyphens:         none;
   justify-content: flex-start;
   grid-template-columns: var(--margin-width) var(--line-width) var(--dead-width);
 }
@@ -80,6 +87,7 @@ slot {
 }
 .line {
   grid-column:     2;
+  display:         inline-block;
   min-width:       var(--line-min-width);
   width:           var(--line-width);
 }
@@ -271,31 +279,34 @@ class MuchText extends HTMLElement {
   #refreshScheduled
   #ctxMenuOpen
   #history  // Undo buffer and status
-  #isDragging  = false
-  #isFocused   = false
-  #caretLine   = 0
-  #caretColumn = 0
-  #caretBlink  = null
-  #updatedSlot = false // Have we updated the slot since the last slotchange?
-  #contentBox  = null
-  #textBox     = null
-  #marginWidth = 0     // Pixel width of margin area
-  #charWidth   = 0
-  #charHeight  = 0
-  ranges       = null
+  #isDragging   = false
+  #isFocused    = false
+  #caretLine    = 0
+  #caretColumn  = 0
+  #stickyColumn = 0
+  #caretBlink   = null
+  #updatedSlot  = false // Have we updated the slot since the last slotchange?
+  #contentBox   = null
+  #textBox      = null
+  #marginWidth  = 0     // Pixel width of margin area
+  #charWidth    = 0
+  #charHeight   = 0
+  ranges        = null
 
   constructor() {
     super()
     this.#internals = this.attachInternals()
     this.#config = {
-      lineWrap     : true,
-      lineNums     : false,
-      altLines     : 'off',
-      disabled     : false,
-      readOnly     : false,
-      showBoundary : true,
-      cols         : null,
-      undoDepth    : 10,
+      lineWrap      : true,
+      lineNums      : false,
+      altLines      : 'off',
+      disabled      : false,
+      readOnly      : false,
+      showBoundary  : true,
+      cols          : null,
+      undoDepth     : 10,
+      rowNavigation : true,
+      eolNavigation : true,
     }
     this.#history = {
       buffer: [],
@@ -615,7 +626,7 @@ class MuchText extends HTMLElement {
 
   static get observedAttributes() {
     return ['cols', 'wrap', 'line-nums', 'line-contrast',
-      'disabled', 'readonly', 'show-boundary']
+      'disabled', 'readonly', 'show-boundary', 'row-navigation']
   }
 
   attributeChangedCallback(name, old, val) {
@@ -627,6 +638,10 @@ class MuchText extends HTMLElement {
     case 'wrap':
       if(val == 'soft') this.#enableLineWrap()
       else if(val == 'off') this.#disableLineWrap()
+      break
+    case 'row-navigation':
+      if(val == 'row')       this.#config.rowNavigation = true
+      else if(val == 'line') this.#config.rowNavigation = false
       break
     case 'line-nums':
       if(val == 'on') this.#enableLineNumbers()
@@ -767,6 +782,8 @@ class MuchText extends HTMLElement {
    ***************************************************************************/
 
 
+  get rowNavigation() { return this.#config.rowNavigation ? 'row' : 'line' }
+  set rowNavigation(x) { this.setAttribute('row-navigation', x) }
 
   get caretPosition() {
     return [this.#caretLine, this.#caretColumn]
@@ -1104,10 +1121,7 @@ class MuchText extends HTMLElement {
     this.#changed.textContent = true
     
     if(advanceCaret) {
-      this.#caretLine = tailPosition[0]
-      this.#caretColumn = tailPosition[1]
-      this.#changed.caretPosition = true
-      this.#scheduleRefresh()
+      this.#moveTo(tailPosition[0], tailPosition[1])
     }
 
     this.#scheduleRefresh()
@@ -1175,11 +1189,9 @@ class MuchText extends HTMLElement {
         break
       }
     }
-    if(moveCaret) {
-      this.#caretLine = startLine
-      this.#caretColumn = startColumn
-      this.#changed.caretPosition = true
-    }
+    if(moveCaret) 
+      this.#moveTo(startLine, startColumn)
+    
     const affectedRange = {
       startLine,
       startColumn,
@@ -1562,7 +1574,7 @@ class MuchText extends HTMLElement {
     }
   }
 
-  /** Render the selection. Affects DOM and styles. */
+  /** Render the selection. Both accesses and changes DOM and styles! */
   #highlightSelection() {
     const selection = this.#selection
     if(!selection) throw 'no selection'
@@ -1580,6 +1592,10 @@ class MuchText extends HTMLElement {
     let offset = {
       top: this.#lines[startLine].element.offsetTop,
       row: 0,
+    }
+    let cols = this.#textBox.cols
+    if(this.#config.lineWrap && startColumn > cols) {
+      offset.top += floor(startColumn / cols) * this.#charHeight
     }
     for(let i=startLine; i<=endLine; i++) {
       let right = i==endLine ? endColumn : null
@@ -1659,14 +1675,14 @@ class MuchText extends HTMLElement {
 
   #selectAll() {
     if(this.#selection) this.clearSelection()
-    const caretLine = this.#caretLine
-    const caretColumn = this.#caretColumn
-    this.#caretLine = 0
-    this.#caretColumn = 0
     this.#startSelection()
-    this.#caretLine = this.#lines.length-1
-    this.#caretColumn = this.#lines[this.#caretLine].chars.length
-    this.#selectToCaret()
+    this.#selection = {
+      startLine:   0,
+      startColumn: 0,
+      endLine:     this.#lines.length-1,
+      endColumn:   this.#lines[this.#lines.length-1].chars.length,
+      element:     this.#selection.element,
+    }
     this.#changed.selection = true
     this.#scheduleRefresh()
   }
@@ -1802,8 +1818,8 @@ class MuchText extends HTMLElement {
     style.setProperty('--margin-width',   `${margin}px`)
     style.setProperty('--boundary-left',  `calc(${margin+tBox.width}px + 0.5ch)`)
     if(wrap) {
-      style.setProperty('--line-width',     `${tBox.cols}ch`)
-      style.setProperty('--line-min-width', `${tBox.cols}ch`)
+      style.setProperty('--line-width',     `${tBox.cols}.5ch`)
+      style.setProperty('--line-min-width', `${tBox.cols}.5ch`)
       style.setProperty('--dead-width',     `${tBox.maxWidth-tBox.width}px`)
     } else {
       style.setProperty('--line-width',      `fit-content`)
@@ -1918,12 +1934,12 @@ class MuchText extends HTMLElement {
   #updateCaret() {
     const cL = min(this.#lines.length-1, this.#caretLine)
     const cC = this.#caretColumn
-    const ln = this.#lines[cL].element
+    const ln = this.#lines[cL]
     const h = this.#charHeight
     const margin = this.#marginWidth
     const tBox = this.#textBox
-    const top = ln.offsetTop // this.#lineOffset(cL)
-    if(cC > tBox.cols && this.#config.lineWrap) {
+    const top = ln.element.offsetTop // this.#lineOffset(cL)
+    if(cC >= tBox.cols && this.#config.lineWrap && cC <= ln.chars.length) {
       const n = floor(cC / tBox.cols)
       const rem = cC % tBox.cols
       this.#elements.caret.style.left = `calc(${margin}px + ${rem}ch)`
@@ -1982,8 +1998,7 @@ class MuchText extends HTMLElement {
     const [line, column] = this.nearestPosition(x, y)
     
     if(this.#selection) {
-      this.#caretLine = line
-      this.#caretColumn = column
+      this.#moveTo(line, column)
       if(!ev.shiftKey) {
         this.clearSelection()
         this.#startSelection()
@@ -1992,19 +2007,15 @@ class MuchText extends HTMLElement {
       }
     } else if(ev.shiftKey) {
       this.#startSelection()
-      this.#caretLine = line
-      this.#caretColumn = column
+      this.#moveTo(line, column)
       this.#selectToCaret()
     } else {
-      this.#caretLine = line
-      this.#caretColumn = column
+      this.#moveTo(line, column)
       this.#startSelection()
     }
 
     this.#isDragging = true
     //this.#elements.text.setPointerCapture(ev.pointerId)
-    this.#changed.caretPosition = true
-    this.#scheduleRefresh()
   }
 
   /** Handle click events (other than those already handled on pointerdown). */
@@ -2019,8 +2030,7 @@ class MuchText extends HTMLElement {
     const tBox = this.#textBox
     const [x, y] = [ev.clientX - tBox.left, ev.clientY - tBox.top]
     const [line, column] = this.nearestPosition(x, y)
-    this.#caretLine = line
-    this.#caretColumn = column
+    this.#moveTo(line, column)
     this.#selectToCaret()
   }
 
@@ -2180,8 +2190,8 @@ class MuchText extends HTMLElement {
       this.#startSelection()
     if(!ev.shiftKey && this.#selection)
       this.clearSelection()
-    else if(this.#caretColumn > 0)
-      this.#caretColumn -= 1
+    else
+      this.#moveLeft()
     if(this.#selection)
       this.#selectToCaret()
   }
@@ -2192,8 +2202,8 @@ class MuchText extends HTMLElement {
       this.#startSelection()
     if(!ev.shiftKey && this.#selection)
       this.clearSelection()
-    else if(this.#caretColumn < line.length) 
-      this.#caretColumn += 1
+    else
+      this.#moveRight()
     if(this.#selection)
       this.#selectToCaret()
   }
@@ -2203,11 +2213,7 @@ class MuchText extends HTMLElement {
       this.#startSelection()
     else if(!ev.shiftKey && this.#selection)
       this.clearSelection()
-    if(this.#caretLine > 0) {
-      this.#caretLine -= 1
-      const newLine = this.#lines[this.#caretLine].chars
-      this.#caretColumn = Math.min(this.#caretColumn, newLine.length)
-    }
+    this.#moveUp()
     if(this.#selection)
       this.#selectToCaret()
   }
@@ -2217,11 +2223,7 @@ class MuchText extends HTMLElement {
       this.#startSelection()
     else if(!ev.shiftKey && this.#selection)
       this.clearSelection()
-    if(this.#caretLine+1 < this.#lines.length) {
-      this.#caretLine += 1
-      const newLine = this.#lines[this.#caretLine].chars
-      this.#caretColumn = Math.min(this.#caretColumn, newLine.length)
-    }
+    this.#moveDown()
     if(this.#selection)
       this.#selectToCaret()
   }
@@ -2258,7 +2260,7 @@ class MuchText extends HTMLElement {
       this.#startSelection()
     else if(!ev.shiftKey && this.#selection)
       this.clearSelection()
-    this.#caretColumn = 0
+    this.#moveTo(this.#caretLine, 0)
     if(this.#selection)
       this.#selectToCaret()
   }
@@ -2268,7 +2270,8 @@ class MuchText extends HTMLElement {
       this.#startSelection()
     else if(!ev.shiftKey && this.#selection)
       this.clearSelection()
-    this.#caretColumn = line.length
+    const line = this.#lines[this.#caretLine]
+    this.#moveTo(this.#caretLine, line.chars.length)
     if(this.#selection)
       this.#selectToCaret()
   }
@@ -2364,6 +2367,129 @@ class MuchText extends HTMLElement {
     if(!this.#elements.ctxSelectAll.classList.contains('enabled')) return
     this.#selectAll()
   }
+
+
+
+  /***************************************************************************
+   *                                                                         *
+   *    CARET MOVEMENT                                                       *
+   *                                                                         *
+   ***************************************************************************/
+
+
+  /** Move the cursor to a given (logical) line and column. */
+  #moveTo(row, col) {
+    const nLines = this.#lines.length - 1
+    const cols = this.#textBox.cols
+    row = min(nLines, row)
+    const line = this.#lines[row]
+    this.#caretLine = row
+    this.#caretColumn = min(col, line.chars.length)
+    this.#stickyColumn = this.#caretColumn % cols
+    this.#changed.caretPosition = true
+    this.#scheduleRefresh()
+  }
+
+  #moveUp() {
+    const cL   = this.#caretLine
+    const cC   = this.#caretColumn
+    const sC   = this.#stickyColumn
+    const cols = this.#textBox.cols
+    const line = this.#lines[cL]
+
+    if(cL > 0) {
+      if(this.#config.rowNavigation && this.#config.lineWrap) {
+        if(cC > cols) {
+          if(sC > cC % cols) 
+            this.#caretColumn -= cols - (sC - cC % cols)
+          else
+            this.#caretColumn -= cols
+        } else {
+          this.#caretLine -= 1
+          const newLine = this.#lines[this.#caretLine]
+          const n = floor(newLine.chars.length / cols)
+          const r = newLine.chars.length % cols
+          this.#caretColumn = n*cols + min(sC, r)
+        }
+      } else {
+        this.#caretLine -= 1
+        const newLine = this.#lines[this.#caretLine]
+        this.#caretColumn = min(sC, newLine.chars.length)
+      }
+    }
+
+    this.#changed.caretPosition = true
+    this.#scheduleRefresh()
+  }
+
+  #moveDown() {
+    const cL   = this.#caretLine
+    const cC   = this.#caretColumn
+    const sC   = this.#stickyColumn
+    const cols = this.#textBox.cols
+    const line = this.#lines[cL]
+
+    if(cL+1 < this.#lines.length) {
+      const newLine = this.#lines[cL+1]
+      if(this.#config.rowNavigation && this.#config.lineWrap) {
+        const cols = this.#textBox.cols
+        const n = floor(cC / cols)
+        if(line.chars.length > (n+1)*cols) {
+          this.#caretColumn = min((n+1)*cols + sC, line.chars.length)
+        } else {
+          const r = sC % cols
+          this.#caretLine++
+          this.#caretColumn = min(newLine.chars.length, r)
+        }
+      } else {
+        this.#caretLine++
+        this.#caretColumn = min(sC, newLine.chars.length)
+      }
+    }
+
+    this.#changed.caretPosition = true
+    this.#scheduleRefresh()
+  }
+
+  #moveLeft() {
+    const cL   = this.#caretLine
+    const cC   = this.#caretColumn
+    const cols = this.#textBox.cols
+    const line = this.#lines[cL]
+
+    if(this.#config.eolNavigation && cC == 0 && cL > 0) {
+      const newLine = this.#lines[cL - 1]
+      this.#caretLine--
+      this.#caretColumn = newLine.chars.length
+    } else if(cC > 0) { 
+      this.#caretColumn -= 1
+    }
+    this.#stickyColumn = this.#caretColumn % cols
+    this.#changed.caretPosition = true
+    this.#scheduleRefresh()
+  }
+
+  #moveRight() {
+    const cL     = this.#caretLine
+    const cC     = this.#caretColumn
+    const line   = this.#lines[cL]
+    const nLines = this.#lines.length
+    const len    = line.chars.length
+    const cols = this.#textBox.cols
+
+    if(this.#config.eolNavigation && cC == len && cL < nLines) {
+      this.#caretLine++
+      this.#caretColumn = 0
+      this.#stickyColumn = 0
+    } else if(cC < len) { 
+      this.#caretColumn += 1
+      this.#stickyColumn += 1
+    }
+    this.#stickyColumn = this.#caretColumn % cols
+    this.#changed.caretPosition = true
+    this.#scheduleRefresh()
+  }
+
 
 }
 
