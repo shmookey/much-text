@@ -85,7 +85,7 @@ slot {
   backdrop-filter: sepia(60%) invert(100%);
   position:        absolute;
 }
-.line {
+.line, #placeholder {
   grid-column:     2;
   display:         inline-block;
   min-width:       var(--line-min-width);
@@ -114,14 +114,14 @@ slot {
 #doc.show-boundary .boundary {
   visibility:      visible;
 }
-.line, .line-number, .line-overflow {
+.line, .line-number, .line-overflow, #placeholder {
   line-height:     calc(1em + 1ex);
   vertical-align:  middle;
 }
 #margin, #overflow-area, #text, .selection {
   display:         contents;
 }
-.line *, .line-selection, #caret {
+.line *, .line-selection, #caret, #placeholder {
   pointer-events:  none;
 }
 #doc.alternating-rows {
@@ -170,6 +170,12 @@ slot {
   height: 0.5em;
   border-bottom: 1px solid #B0B0B0;
   margin-bottom: 0.5em;
+}
+#placeholder {
+  position:   absolute;
+  opacity:    50%;
+  top:        0;
+  background: transparent;
 }
 `
 
@@ -404,6 +410,7 @@ class MuchText extends HTMLElement {
       margin:       createElement('div',   {id: 'margin', part: 'margin'}),
       text:         createElement('div',   {id: 'text', part: 'text'}),
       overflowArea: createElement('div',   {id: 'overflow-area'}),
+      placeholder:  createElement('div',   {id: 'placeholder', part: 'placeholder'}),
       boundary:     createElement('div',   {className: 'boundary', part: 'boundary'}),
       caret:        createElement('div',   {className: 'caret', part: 'caret'}),
       style:        createElement('style', {textContent: cssSource}),
@@ -417,6 +424,11 @@ class MuchText extends HTMLElement {
       ctxSelectAll: contextMenu.querySelector('.select-all'), 
       textNode:     new Text(),
     }
+    this.#elements.text.append(
+      this.#lines[0].element,
+      this.#elements.placeholder,
+    )
+    this.#updateLineNumbers()
     this.#elements.doc.append(
       this.#elements.margin,
       this.#elements.text,
@@ -430,7 +442,6 @@ class MuchText extends HTMLElement {
       duration: 1000,
       iterations: Infinity,
     })
-    this.#elements.text.appendChild(this.#lines[0].element)
     this.#elements.doc.addEventListener('click',           () => {})
     this.#elements.doc.addEventListener('pointerdown',     e => this.#handlePointerDown(e))
     this.#elements.doc.addEventListener('click',           e => this.#handleClick(e))
@@ -481,7 +492,6 @@ class MuchText extends HTMLElement {
       this.#elements.style,
       this.#elements.doc,
       this.#elements.slot)
-
     //this.#enableLineWrap()
     //this.#disableLineNumbers()
   }
@@ -625,7 +635,7 @@ class MuchText extends HTMLElement {
 
 
   static get observedAttributes() {
-    return ['cols', 'wrap', 'line-nums', 'line-contrast',
+    return ['cols', 'wrap', 'line-nums', 'line-contrast', 'placeholder',
       'disabled', 'readonly', 'show-boundary', 'row-navigation']
   }
 
@@ -659,6 +669,9 @@ class MuchText extends HTMLElement {
     case 'disabled':
       if(val == 'true') this.#setDisabled(true)
       else if(val == 'false') this.#setDisabled(false)
+      break
+    case 'placeholder':
+      this.#elements.placeholder.textContent = val
       break
     case 'cols':
       if(val == 'auto') {
@@ -784,6 +797,9 @@ class MuchText extends HTMLElement {
 
   get rowNavigation() { return this.#config.rowNavigation ? 'row' : 'line' }
   set rowNavigation(x) { this.setAttribute('row-navigation', x) }
+
+  get placeholder() { return this.#elements.placeholder.textContent }
+  set placeholder(x) { this.setAttribute('placeholder', x) }
 
   get caretPosition() {
     return [this.#caretLine, this.#caretColumn]
@@ -1031,6 +1047,10 @@ class MuchText extends HTMLElement {
    * Returns a [column, line] pair at the end of the inserted range.
    */
   insertAt(row, col, text, updateSlot=true, inputType='insertText', advanceCaret=true) {
+    if(this.#lines.length == 0 || (this.#lines.length == 1 && this.#lines[0].chars.length == 0) && 
+       text.length > 0) {
+      this.#elements.placeholder.remove()
+    }
     // Update line data
     const line = this.#lines[row]
     const rest = line.chars.slice(col)
@@ -1226,6 +1246,9 @@ class MuchText extends HTMLElement {
     this.dispatchEvent(ev)
     this.#changed.textContent = true
     this.#scheduleRefresh()
+    if(this.#lines.length == 0 || (this.#lines.length == 1 && this.#lines[0].chars.length == 0)) {
+      this.#elements.text.append(this.#elements.placeholder)
+    }
   }
 
   rangeLength(startLine, startColumn, endLine, endColumn) {
@@ -1461,6 +1484,7 @@ class MuchText extends HTMLElement {
 
   #markingsAt(row, col) {
     const line = this.#lines[row]
+    if(!line) return []
     return line.ranges.filter(r => MuchText.isInRange(row, col, r))
   }
 
@@ -1648,6 +1672,7 @@ class MuchText extends HTMLElement {
  
     this.#selection.element.remove()
     this.#selection = null
+    this.#elements.doc.classList.remove('select')
   }
 
   /** Select text within a given range, clobbering any previous selection. */
