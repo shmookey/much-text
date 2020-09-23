@@ -135,7 +135,7 @@ slot {
 #contextMenu {
   position: fixed;
   width: fit-content;
-  background: #CECECE;
+  background: #E5E5E5;
   cursor: default;
   color: #808080;
   font-family: system-ui;
@@ -963,7 +963,7 @@ class MuchText extends HTMLElement {
   #clipboardCut() {
     if(!this.#selection) return
     const text = this.getRange(this.#selection)
-    this.deleteSelection()
+    this.deleteSelection('deleteByCut')
     navigator.clipboard.writeText(text)
   }
 
@@ -976,7 +976,7 @@ class MuchText extends HTMLElement {
   async #clipboardPaste() {
     if(this.#selection) this.deleteSelection()
     const text = await navigator.clipboard.readText()
-    this.insert(text)
+    this.insert(text, 'insertFromPaste')
   }
 
 
@@ -991,8 +991,8 @@ class MuchText extends HTMLElement {
   /** Replace the contents of the text area with a string. */
   setText(text, updateSlot=true) {
     const n = this.#lines.length-1
-    this.deleteRange({startLine: 0, startColumn: 0, endLine: n, endColumn: this.#lines[n].chars.length}, true)
-    const [line, column] = this.insertAt(this.#caretLine, this.#caretColumn, text, updateSlot, 'reset')
+    this.deleteRange({startLine: 0, startColumn: 0, endLine: n, endColumn: this.#lines[n].chars.length}, true, 'deleteContent')
+    const [line, column] = this.insertAt(this.#caretLine, this.#caretColumn, text, updateSlot, 'reset', false)
   }
 
   /** Insert a string at the caret position. 
@@ -1000,8 +1000,8 @@ class MuchText extends HTMLElement {
    * Returns a [column, line] pair at the end of the inserted range. The caret
    * is optionally advanced to the end of the inserted text.
    */
-  insert(text, advanceCaret=true, updateSlot=true) {
-    const [line, column] = this.insertAt(this.#caretLine, this.#caretColumn, text, updateSlot, 'insertText', advanceCaret)
+  insert(text, inputType='insertText') {
+    const [line, column] = this.insertAt(this.#caretLine, this.#caretColumn, text, true, inputType, true)
     return [line, column]
   }
 
@@ -1578,7 +1578,7 @@ class MuchText extends HTMLElement {
     return this.getRange(startLine, startColumn, endLine, endColumn)
   }
 
-  deleteSelection() {
+  deleteSelection(inputType='deleteContent') {
     if(!this.#selection) return
     const selection = this.#selection
     const isBackwards = 
@@ -1589,7 +1589,7 @@ class MuchText extends HTMLElement {
     const startColumn = isBackwards ? selection.endColumn : selection.startColumn
     const endColumn   = isBackwards ? selection.startColumn : selection.endColumn
  
-    this.deleteRange({startLine, startColumn, endLine, endColumn}, true)
+    this.deleteRange({startLine, startColumn, endLine, endColumn}, true, inputType)
  
     this.#selection.element.remove()
     this.#selection = null
@@ -2085,7 +2085,7 @@ class MuchText extends HTMLElement {
     if(this.#config.readOnly) return
     if(this.#selection)
       this.deleteSelection()
-    this.insert('\n')
+    this.insert('\n', 'insertLineBreak')
   }
 
   #keyBackspace(ev) {
@@ -2103,7 +2103,7 @@ class MuchText extends HTMLElement {
       startLine--
       startColumn = this.#lines[startLine].chars.length
     }
-    this.deleteRange({startLine, startColumn, endLine, endColumn}, true)
+    this.deleteRange({startLine, startColumn, endLine, endColumn}, true, 'deleteContentBackward')
   }
 
   #keyEscape(ev) {
@@ -2213,7 +2213,7 @@ class MuchText extends HTMLElement {
   #keyTextInput(ev) {
     if(this.#config.readOnly) return 
     if(this.#selection) this.deleteSelection()
-    this.insert(ev.key)
+    this.insert(ev.key, 'insertText')
   }
 
 
