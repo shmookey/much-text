@@ -389,7 +389,7 @@ class MuchText extends HTMLElement {
       key:     'A',
     }])
     this.#elements = {
-      doc:          createElement('div',   {id: 'doc', part: 'doc', autofocus: true, tabIndex: 0}),
+      doc:          createElement('div',   {id: 'doc', part: 'doc', tabIndex: 0}),
       margin:       createElement('div',   {id: 'margin', part: 'margin'}),
       text:         createElement('div',   {id: 'text', part: 'text'}),
       overflowArea: createElement('div',   {id: 'overflow-area'}),
@@ -1259,7 +1259,8 @@ class MuchText extends HTMLElement {
       history.buffer.splice(history.index, history.buffer.length - history.index)
     }
     const last = history.buffer[history.index-1]
-    if(history.index > 0 && action == 'insertText' && last?.action == 'insertText' &&
+    if(history.index > 0 && (action == 'insertText' || action == 'insertLineBreak') && 
+       (last?.action == 'insertText' || last?.action == 'insertLineBreak') &&
        last?.open && last?.range.endLine == range.startLine && last?.range.endColumn == range.startColumn) {
       last.text += text
       last.range.endLine = range.endLine
@@ -1269,10 +1270,14 @@ class MuchText extends HTMLElement {
       last.text = text + last.text
       last.range.startLine = range.startLine
       last.range.startColumn = range.startColumn
+    } else if(history.index > 0 && action == 'deleteContentForward' && last?.action == 'deleteContentForward' &&
+       last?.open && last?.range.startLine == range.startLine && last?.range.startColumn == range.startColumn) {
+      last.text += text
+      last.range.endLine = range.endLine
+      last.range.endColumn = range.endColumn
     } else {
       if(last) last.open = false
-      const isOpen = action == 'insertText' || action == 'deleteContentBackward'
-      const entry = {type, range, text, action, open: isOpen}
+      const entry = {type, range, text, action, open: true}
       history.buffer.push(entry)
       if(history.length > this.#config.cfgUndoDepth)
         history.buffer.shift()
