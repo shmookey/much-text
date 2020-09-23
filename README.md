@@ -53,11 +53,11 @@ the HTMLElement interface. Implementing all standard attributes for <textarea>
 is a work in progress. At time of writing, the following standard attributes
 are available:
 
-  cols disabled readonly wrap
+  cols disabled form name readonly required wrap
 
 The following standard attributes are planned but not yet implemented:
 
-  form name placeholder required rows
+  placeholder rows
 
 Support for these standard attributes is not currently planned:
 
@@ -149,16 +149,4 @@ stamped out - it is, in other words, a bug.
   `cols='auto'` in conjunction with line wrapping will cause wrapping to occur
   at the edge of the element, for whatever width it happens to be.
 
-
-#    KNOWN ISSUES
-
-- Doesn't work on firefox (no private class fields yet)
-- Ignored by form elements
-- Styling margin width breaks layout
-- inputType on events not always accurate
-- Not implemented: graceful degradation
-- Not implemented: context menu
-- Not implemented: tabs
-- Not implemented: row-based keyboard navigation
-- Not implemented: "hard" wrapping mode
 
