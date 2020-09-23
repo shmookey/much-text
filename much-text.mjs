@@ -185,6 +185,18 @@ class MuchInputEvent extends InputEvent {
   }
 }
 
+/* HISTORY ENTRY
+
+  entry = {
+    type:  'insert' or 'delete',
+    text:  <the inserted or deleted string>,
+    range: <affected range>
+  }
+ 
+  For insert actions, a post-insertion `range` is used. For deletions, a pre-
+  insertion range is used. 
+*/
+
 class MuchText extends HTMLElement {
   #config
   #lines
@@ -194,23 +206,19 @@ class MuchText extends HTMLElement {
   #changed
   #refreshScheduled
   #ctxMenuOpen
+  #history  // Undo buffer and status
   #isDragging  = false
   #isFocused   = false
   #caretLine   = 0
   #caretColumn = 0
   #caretBlink  = null
-  #topLine     = 0     // Line number of first visible line
-  #bottomLine  = 0     // Line number of last visible line
   #updatedSlot = false // Have we updated the slot since the last slotchange?
-  // Geometry 
   #contentBox  = null
   #textBox     = null
   #marginWidth = 0     // Pixel width of margin area
   #charWidth   = 0
   #charHeight  = 0
-  // Highlighting
-  lastRangeID = 0
-  ranges      = null
+  ranges       = null
 
   constructor() {
     super()
@@ -222,6 +230,11 @@ class MuchText extends HTMLElement {
       readOnly     : false,
       showBoundary : true,
       cols         : null,
+      undoDepth    : 10,
+    }
+    this.#history = {
+      buffer: [],
+      index:  0,  // Position in buffer, for repeated undo/redo actions
     }
     this.ranges = []
     this.#lines = [{
@@ -275,12 +288,16 @@ class MuchText extends HTMLElement {
       style:        createElement('style', {textContent: cssSource}),
       slot:         createElement('slot'),
       ctxMenu:      createElement('div',   {id: 'contextMenu', part: 'contextMenu'}),
-      ctxCut:       createElement('div',   {className: 'cut', textContent: 'Cut'}),
-      ctxCopy:      createElement('div',   {className: 'copy', textContent: 'Copy'}),
+      ctxCut:       createElement('div',   {className: 'cut',   textContent: 'Cut'}),
+      ctxCopy:      createElement('div',   {className: 'copy',  textContent: 'Copy'}),
       ctxPaste:     createElement('div',   {className: 'paste', textContent: 'Paste'}),
+      ctxUndo:      createElement('div',   {className: 'undo',  textContent: 'Undo'}),
+      ctxRedo:      createElement('div',   {className: 'redo',  textContent: 'Redo'}),
       textNode:     new Text(),
     }
     this.#elements.ctxMenu.append(
+      this.#elements.ctxUndo,
+      this.#elements.ctxRedo,
       this.#elements.ctxCut,
       this.#elements.ctxCopy,
       this.#elements.ctxPaste,
@@ -299,23 +316,25 @@ class MuchText extends HTMLElement {
       iterations: Infinity,
     })
     this.#elements.text.appendChild(this.#lines[0].element)
-    this.#elements.doc.addEventListener('click', () => {})
-    this.#elements.doc.addEventListener('pointerdown', e => this.#handlePointerDown(e))
-    this.#elements.doc.addEventListener('click',       e => this.#handleClick(e))
-    this.#elements.doc.addEventListener('pointermove', e => this.#handlePointerMove(e))
-    this.#elements.doc.addEventListener('pointerup',   e => this.#handlePointerUp(e))
-    this.#elements.doc.addEventListener('keydown',     e => this.#handleKeyDown(e))
-    this.#elements.doc.addEventListener('focus',       e => this.#handleFocus(e))
-    this.#elements.doc.addEventListener('blur',        e => this.#handleBlur(e))
-    this.addEventListener('scroll',                    e => this.#handleScroll(e))
-    this.#elements.slot.addEventListener('slotchange', e => this.#handleSlotChange(e))
-    this.#elements.doc.addEventListener('contextmenu', e => this.#openContextMenu(e))
-    this.#elements.ctxMenu.addEventListener('click',   e => {})
-    this.#elements.ctxMenu.addEventListener('pointerdown',   e => this.#contextMenuPointerEvent(e))
+    this.#elements.doc.addEventListener('click',           () => {})
+    this.#elements.doc.addEventListener('pointerdown',     e => this.#handlePointerDown(e))
+    this.#elements.doc.addEventListener('click',           e => this.#handleClick(e))
+    this.#elements.doc.addEventListener('pointermove',     e => this.#handlePointerMove(e))
+    this.#elements.doc.addEventListener('pointerup',       e => this.#handlePointerUp(e))
+    this.#elements.doc.addEventListener('keydown',         e => this.#handleKeyDown(e))
+    this.#elements.doc.addEventListener('focus',           e => this.#handleFocus(e))
+    this.#elements.doc.addEventListener('blur',            e => this.#handleBlur(e))
+    this.addEventListener('scroll',                        e => this.#handleScroll(e))
+    this.#elements.slot.addEventListener('slotchange',     e => this.#handleSlotChange(e))
+    this.#elements.doc.addEventListener('contextmenu',     e => this.#openContextMenu(e))
+    this.#elements.ctxMenu.addEventListener('click',       e => {})
+    this.#elements.ctxMenu.addEventListener('pointerdown', e => this.#contextMenuPointerEvent(e))
     this.#elements.ctxMenu.addEventListener('pointerup',   e => this.#contextMenuPointerEvent(e))
-    this.#elements.ctxCopy.addEventListener('click',   e => this.#contextMenuCopy(e))
-    this.#elements.ctxCut.addEventListener('click',    e => this.#contextMenuCut(e))
-    this.#elements.ctxPaste.addEventListener('click',  e => this.#contextMenuPaste(e))
+    this.#elements.ctxCopy.addEventListener('click',       e => this.#contextMenuCopy(e))
+    this.#elements.ctxCut.addEventListener('click',        e => this.#contextMenuCut(e))
+    this.#elements.ctxPaste.addEventListener('click',      e => this.#contextMenuPaste(e))
+    this.#elements.ctxUndo.addEventListener('click',       e => this.#contextMenuUndo(e))
+    this.#elements.ctxRedo.addEventListener('click',       e => this.#contextMenuRedo(e))
 
     const resizeObserver = new ResizeObserver(entries => {
       for(let entry of entries) {
@@ -363,53 +382,6 @@ class MuchText extends HTMLElement {
       textBox:          this.#textBox,
       visibleRegion:    this.#visibleRegion,
     }
-  }
-
-  #openContextMenu(ev) {
-    ev.preventDefault()
-    const x = ev.clientX - this.#contentBox.left
-    const y = ev.clientY - this.#contentBox.top
-    const ctxMenu = this.#elements.ctxMenu
-    ctxMenu.style.left = `${x}px`
-    ctxMenu.style.top = `${y}px`
-    this.#ctxMenuOpen = true
-    this.#elements.doc.append(ctxMenu)
-    this.#elements.ctxPaste.classList.add('enabled')
-    if(this.#selection) {
-      this.#elements.ctxCopy.classList.add('enabled')
-      this.#elements.ctxCut .classList.add('enabled')
-    } else { 
-      this.#elements.ctxCopy.classList.remove('enabled')
-      this.#elements.ctxCut .classList.remove('enabled')
-    }
-    ctxMenu.focus()
-  }
-
-  #closeContextMenu() {
-    this.#ctxMenuOpen = false
-    this.#elements.ctxMenu.remove()
-  }
-
-  #contextMenuPointerEvent(ev) {
-    ev.stopPropagation()
-  }
-
-  #contextMenuCopy(ev) {
-    if(!this.#elements.ctxCopy.classList.contains('enabled')) return
-    this.#clipboardCopy()
-  }
-
-  #contextMenuCut(ev) {
-    if(!this.#elements.ctxCut.classList.contains('enabled')) return
-    if(this.#config.readOnly) 
-      this.#clipboardCopy()
-    else
-      this.#clipboardCut()
-  }
-
-  #contextMenuPaste(ev) {
-    if(!this.#elements.ctxPaste.classList.contains('enabled')) return
-    this.#clipboardPaste()
   }
 
 
@@ -904,7 +876,7 @@ class MuchText extends HTMLElement {
   setText(text, updateSlot=true) {
     const n = this.#lines.length-1
     this.deleteRange({startLine: 0, startColumn: 0, endLine: n, endColumn: this.#lines[n].chars.length}, true)
-    this.insert(text, false, updateSlot)
+    const [line, column] = this.insertAt(this.#caretLine, this.#caretColumn, text, updateSlot, 'reset')
   }
 
   /** Insert a string at the caret position. 
@@ -913,13 +885,7 @@ class MuchText extends HTMLElement {
    * is optionally advanced to the end of the inserted text.
    */
   insert(text, advanceCaret=true, updateSlot=true) {
-    const [line, column] = this.insertAt(this.#caretLine, this.#caretColumn, text, updateSlot)
-    if(advanceCaret) {
-      this.#caretLine = line
-      this.#caretColumn = column
-      this.#changed.caretPosition = true
-      this.#scheduleRefresh()
-    }
+    const [line, column] = this.insertAt(this.#caretLine, this.#caretColumn, text, updateSlot, 'insertText', advanceCaret)
     return [line, column]
   }
 
@@ -927,7 +893,7 @@ class MuchText extends HTMLElement {
    *
    * Returns a [column, line] pair at the end of the inserted range.
    */
-  insertAt(row, col, text, updateSlot=true, inputType='insertText') {
+  insertAt(row, col, text, updateSlot=true, inputType='insertText', advanceCaret=true) {
     // Update line data
     const line = this.#lines[row]
     const rest = line.chars.slice(col)
@@ -988,9 +954,9 @@ class MuchText extends HTMLElement {
       startLine: row,
       startColumn: col,
       endLine: tailPosition[0],
-      endColumn: nLines == 0 ? tailPosition[1]
-                             : last.chars.length,
+      endColumn: tailPosition[1],
     }
+    this.#addHistoryEntry('insert', affectedRange, text, inputType)
     const ev = new MuchInputEvent('input', {
       affectedRange,
       extendedRange: MuchText.mergeRanges(zone, this.findExtendedRange(affectedRange)),
@@ -1016,9 +982,15 @@ class MuchText extends HTMLElement {
       this.#changed.lineCount = true
     }
     this.#changed.textContent = true
-    this.#changed.caretPosition = true
-    this.#scheduleRefresh()
     
+    if(advanceCaret) {
+      this.#caretLine = tailPosition[0]
+      this.#caretColumn = tailPosition[1]
+      this.#changed.caretPosition = true
+      this.#scheduleRefresh()
+    }
+
+    this.#scheduleRefresh()
     return tailPosition
   }
 
@@ -1029,6 +1001,7 @@ class MuchText extends HTMLElement {
   deleteRange(range, moveCaret=true, inputType='deleteContent') {
     const {startLine,startColumn,endLine,endColumn} = range
     if(startLine==endLine && startColumn==endColumn) return
+    const text = this.getRange(range)
     const nLines = endLine - startLine
     const offset = this.offsetOf(startLine, startColumn)
     const len = this.rangeLength(startLine, startColumn, endLine, endColumn) 
@@ -1093,6 +1066,7 @@ class MuchText extends HTMLElement {
       endLine: startLine,
       endColumn: startColumn,
     }
+    this.#addHistoryEntry('delete', range, text, inputType)
     const ev = new MuchInputEvent('input', {
       affectedRange,
       extendedRange: this.findExtendedRange(affectedRange),
@@ -1143,6 +1117,66 @@ class MuchText extends HTMLElement {
   /** Get the character index of a line,column position. */
   offsetOf(row, col) {
     return this.#lines.slice(0,row).reduce((acc,x) => acc+x.chars.length+1, 0) + col
+  }
+
+
+
+  /***************************************************************************
+   *                                                                         *
+   *    UNDO / REDO                                                          *
+   *                                                                         *
+   ***************************************************************************/
+
+
+  /** Record an action in the undo buffer. */
+  #addHistoryEntry(type, range, text, action) {
+    if(action == 'reset') {
+      this.#history.index = 0
+      this.#history.buffer.splice(0, this.#history.buffer.length)
+      return
+    } else if(action == 'historyUndo' || action == 'historyRedo') {
+      return 
+    }
+
+    const history = this.#history
+    if(history.index < history.buffer.length) {
+      history.buffer.splice(history.index, history.buffer.length - history.index)
+    }
+    const isOpen = action == 'typing'
+    const entry = {type, range, text, action, open: isOpen}
+    history.buffer.push(entry)
+    if(history.length > this.#config.cfgUndoDepth)
+      history.buffer.shift()
+    else
+      history.index++
+  }
+
+  /** Revert to previous state in history buffer. */
+  #undo() {
+    const history = this.#history
+    if(history.index == 0)
+      return
+    const entry = history.buffer[history.index-1]
+    history.index--
+    if(entry.type == 'insert') {
+      this.deleteRange(entry.range, true, 'historyUndo')
+    } else if(entry.type == 'delete') {
+      this.insertAt(entry.range.startLine, entry.range.startColumn, entry.text, true, 'historyUndo')
+    }
+  }
+
+  /** Restore to next state in history buffer. */
+  #redo() {
+    const history = this.#history
+    if(history.index >= history.buffer.length)
+      return
+    const entry = history.buffer[history.index]
+    history.index++
+    if(entry.type == 'insert') {
+      this.insertAt(entry.range.startLine, entry.range.startColumn, entry.text, true, 'historyRedo')
+    } else if(entry.type == 'delete') {
+      this.deleteRange(entry.range, true, 'historyRedo')
+    }
   }
 
 
@@ -1880,6 +1914,8 @@ class MuchText extends HTMLElement {
       case 'KeyC':       if(isMod) { ev.preventDefault(); this.#keyModC(ev); break }
       case 'KeyX':       if(isMod) { ev.preventDefault(); this.#keyModX(ev); break }
       case 'KeyV':       if(isMod) { ev.preventDefault(); this.#keyModV(ev); break }
+      case 'KeyZ':       if(isMod) { ev.preventDefault(); this.#keyModZ(ev); break }
+      case 'KeyY':       if(isMod) { ev.preventDefault(); this.#keyModY(ev); break }
       default:
         if(ev.location == KeyboardEvent.DOM_KEY_LOCATION_STANDARD
            && !ev.ctrlKey) {
@@ -2024,6 +2060,14 @@ class MuchText extends HTMLElement {
     this.#clipboardPaste()
   }
 
+  #keyModZ(ev) {
+    this.#undo()
+  }
+
+  #keyModY(ev) {
+    this.#redo()
+  }
+
   #keyHome(ev) {
     if(ev.shiftKey && !this.#selection) 
       this.#startSelection()
@@ -2048,6 +2092,82 @@ class MuchText extends HTMLElement {
     if(this.#config.readOnly) return 
     if(this.#selection) this.deleteSelection()
     this.insert(ev.key)
+  }
+
+
+
+  /***************************************************************************
+   *                                                                         *
+   *    CONTEXT MENU                                                         *
+   *                                                                         *
+   ***************************************************************************/
+
+
+  #openContextMenu(ev) {
+    ev.preventDefault()
+    const x = ev.clientX - this.#contentBox.left
+    const y = ev.clientY - this.#contentBox.top
+    const ctxMenu = this.#elements.ctxMenu
+    ctxMenu.style.left = `${x}px`
+    ctxMenu.style.top = `${y}px`
+    this.#ctxMenuOpen = true
+    this.#elements.doc.append(ctxMenu)
+    this.#elements.ctxPaste.classList.add('enabled')
+    if(this.#history.index > 0) {
+      this.#elements.ctxUndo.classList.add('enabled')
+    } else {
+      this.#elements.ctxUndo.classList.remove('enabled')
+    }
+    if(this.#history.index < this.#history.buffer.length) {
+      this.#elements.ctxRedo.classList.add('enabled')
+    } else {
+      this.#elements.ctxRedo.classList.remove('enabled')
+    }
+    if(this.#selection) {
+      this.#elements.ctxCopy.classList.add('enabled')
+      this.#elements.ctxCut .classList.add('enabled')
+    } else { 
+      this.#elements.ctxCopy.classList.remove('enabled')
+      this.#elements.ctxCut .classList.remove('enabled')
+    }
+    ctxMenu.focus()
+  }
+
+  #closeContextMenu() {
+    this.#ctxMenuOpen = false
+    this.#elements.ctxMenu.remove()
+  }
+
+  #contextMenuPointerEvent(ev) {
+    ev.stopPropagation()
+  }
+
+  #contextMenuCopy(ev) {
+    if(!this.#elements.ctxCopy.classList.contains('enabled')) return
+    this.#clipboardCopy()
+  }
+
+  #contextMenuCut(ev) {
+    if(!this.#elements.ctxCut.classList.contains('enabled')) return
+    if(this.#config.readOnly) 
+      this.#clipboardCopy()
+    else
+      this.#clipboardCut()
+  }
+
+  #contextMenuPaste(ev) {
+    if(!this.#elements.ctxPaste.classList.contains('enabled')) return
+    this.#clipboardPaste()
+  }
+
+  #contextMenuUndo(ev) {
+    if(!this.#elements.ctxUndo.classList.contains('enabled')) return
+    this.#undo()
+  }
+
+  #contextMenuRedo(ev) {
+    if(!this.#elements.ctxRedo.classList.contains('enabled')) return
+    this.#redo()
   }
 
 }
