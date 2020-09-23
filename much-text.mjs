@@ -2049,6 +2049,7 @@ class MuchText extends HTMLElement {
     switch(ev.code) {
       case 'Enter':      ev.preventDefault(); this.#keyEnter(ev); break
       case 'Backspace':  ev.preventDefault(); this.#keyBackspace(ev); break
+      case 'Delete':     ev.preventDefault(); this.#keyDelete(ev); break
       case 'Escape':     ev.preventDefault(); this.#keyEscape(ev); break
       case 'ArrowLeft':  ev.preventDefault(); this.#keyArrowLeft(ev); break
       case 'ArrowRight': ev.preventDefault(); this.#keyArrowRight(ev); break
@@ -2120,6 +2121,26 @@ class MuchText extends HTMLElement {
       startColumn = this.#lines[startLine].chars.length
     }
     this.deleteRange({startLine, startColumn, endLine, endColumn}, true, 'deleteContentBackward')
+  }
+
+  #keyDelete(ev) {
+    if(this.#config.readOnly) return
+    if(this.#selection) {
+      this.deleteSelection()
+      return
+    }
+    const range = {
+      startLine:   this.#caretLine,
+      startColumn: this.#caretColumn,
+      endLine:     this.#caretLine,
+      endColumn:   this.#caretColumn + 1,
+    }
+    if(range.endColumn > this.#lines[range.endLine].chars.length) {
+      if(range.endLine == this.#lines.length-1) return
+      range.endLine++
+      range.endColumn = 0
+    }
+    this.deleteRange(range, true, 'deleteContentForward')
   }
 
   #keyEscape(ev) {
