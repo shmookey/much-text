@@ -3,6 +3,19 @@ export const MuchText = (() => {
 const { ceil, floor, min, max } = Math
 
 const isMac = navigator.platform.indexOf('Mac') > -1
+function formatKeyCombo(isMod, isShift, key) {
+  let buf = ""
+  if(isMac) {
+    if(isMod)   buf += "⌘"
+    if(isShift) buf += "⇧"
+  } else {
+    if(isMod)   buf += "Ctrl+"
+    if(isShift) buf += "Shift+"
+  }
+  buf += key.toUpperCase()
+  return buf
+}
+
 const cssSource = `
 :root {
   --line-width:     80ch;
@@ -120,23 +133,71 @@ slot {
   background: repeating-linear-gradient(to bottom, #2F2D2F 0px, #2F2D2F 20px, #2A2A2A 20px, #2A2A2A 40px);
 }
 #contextMenu {
-  position: absolute;
+  position: fixed;
   width: fit-content;
-  background: #DCDCDC;
+  background: #CECECE;
   cursor: default;
   color: #808080;
+  font-family: system-ui;
+  font-size: 0.8em;
+  padding: 5px 0px;
 }
-#contextMenu > div {
+#contextMenu .item {
   height: 1.5em;
   padding: 0.25em 1.1em;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
-#contextMenu > div.enabled {
+#contextMenu .label {
+  width: 100px;
+}
+#contextMenu > .item.enabled {
   color: #101010;
 }
-#contextMenu > div.enabled:hover {
+#contextMenu > .item.enabled:hover {
   background: #ACACAC;
 }
+#contextMenu .item.separator {
+  height: 0.5em;
+  border-bottom: 1px solid #B0B0B0;
+  margin-bottom: 0.5em;
+}
 `
+
+function createContextMenu(items) {
+  const elem = createElement('div', {id: 'contextMenu', part: 'contextMenu'})
+  const itemElems = items.map(item => {
+    const e = createElement('div', {className: 'item', part: 'item'})
+    switch(item.type) {
+    case 'separator':
+      e.classList.add('separator')
+      e.part.add('separator')
+      break
+    case 'action':
+      e.classList.add('action')
+      e.classList.add(item.name)
+      e.part.add('action')
+      e.part.add(item.name)
+      const lbl = createElement('div', {
+        className: 'label',
+        part: 'ctxLabel',
+        textContent: item.label,
+      })
+      const key = createElement('div', {
+        className: 'key',
+        part: 'ctxKey',
+        textContent: formatKeyCombo(item.isMod, item.isShift, item.key),
+      })
+      e.append(lbl, key)
+      break
+    }
+    return e
+  })
+  elem.append(...itemElems)
+  return elem
+}
+
 
 function createElement(tagName, props=null) {
   const e = document.createElement(tagName)
@@ -278,6 +339,51 @@ class MuchText extends HTMLElement {
       mode:           'open',
       delegatesFocus: true,
     })
+    const contextMenu = createContextMenu([{
+      type:    'action',
+      name:    'undo',
+      label:   'Undo',
+      isMod:   true,
+      isShift: false,
+      key:     'Z',
+    }, {
+      type:    'action',
+      name:    'redo',
+      label:   'Redo',
+      isMod:   true,
+      isShift: true,
+      key:     'Z',
+    }, {
+      type:    'separator',
+    }, {
+      type:    'action',
+      name:    'cut',
+      label:   'Cut',
+      isMod:   true,
+      isShift: false,
+      key:     'X',
+    }, {
+      type:    'action',
+      name:    'copy',
+      label:   'Copy',
+      isMod:   true,
+      isShift: false,
+      key:     'C',
+    }, {
+      type:    'action',
+      name:    'paste',
+      label:   'Paste',
+      isMod:   true,
+      isShift: false,
+      key:     'V',
+    }, {
+      type:    'action',
+      name:    'select-all',
+      label:   'Select all',
+      isMod:   true,
+      isShift: false,
+      key:     'A',
+    }])
     this.#elements = {
       doc:          createElement('div',   {id: 'doc', part: 'doc', autofocus: true, tabIndex: 0}),
       margin:       createElement('div',   {id: 'margin', part: 'margin'}),
@@ -287,21 +393,15 @@ class MuchText extends HTMLElement {
       caret:        createElement('div',   {className: 'caret', part: 'caret'}),
       style:        createElement('style', {textContent: cssSource}),
       slot:         createElement('slot'),
-      ctxMenu:      createElement('div',   {id: 'contextMenu', part: 'contextMenu'}),
-      ctxCut:       createElement('div',   {className: 'cut',   textContent: 'Cut'}),
-      ctxCopy:      createElement('div',   {className: 'copy',  textContent: 'Copy'}),
-      ctxPaste:     createElement('div',   {className: 'paste', textContent: 'Paste'}),
-      ctxUndo:      createElement('div',   {className: 'undo',  textContent: 'Undo'}),
-      ctxRedo:      createElement('div',   {className: 'redo',  textContent: 'Redo'}),
+      ctxMenu:      contextMenu,
+      ctxCut:       contextMenu.querySelector('.cut'), 
+      ctxCopy:      contextMenu.querySelector('.copy'), 
+      ctxPaste:     contextMenu.querySelector('.paste'), 
+      ctxUndo:      contextMenu.querySelector('.undo'), 
+      ctxRedo:      contextMenu.querySelector('.redo'), 
+      ctxSelectAll: contextMenu.querySelector('.select-all'), 
       textNode:     new Text(),
     }
-    this.#elements.ctxMenu.append(
-      this.#elements.ctxUndo,
-      this.#elements.ctxRedo,
-      this.#elements.ctxCut,
-      this.#elements.ctxCopy,
-      this.#elements.ctxPaste,
-    )
     this.#elements.doc.append(
       this.#elements.margin,
       this.#elements.text,
@@ -335,6 +435,7 @@ class MuchText extends HTMLElement {
     this.#elements.ctxPaste.addEventListener('click',      e => this.#contextMenuPaste(e))
     this.#elements.ctxUndo.addEventListener('click',       e => this.#contextMenuUndo(e))
     this.#elements.ctxRedo.addEventListener('click',       e => this.#contextMenuRedo(e))
+    this.#elements.ctxSelectAll.addEventListener('click',  e => this.#contextMenuSelectAll(e))
 
     const resizeObserver = new ResizeObserver(entries => {
       for(let entry of entries) {
@@ -1502,6 +1603,20 @@ class MuchText extends HTMLElement {
     this.#selectRange({startLine: row, startColumn: from + 1, endLine: row, endColumn: to})
   }
 
+  #selectAll() {
+    if(this.#selection) this.clearSelection()
+    const caretLine = this.#caretLine
+    const caretColumn = this.#caretColumn
+    this.#caretLine = 0
+    this.#caretColumn = 0
+    this.#startSelection()
+    this.#caretLine = this.#lines.length-1
+    this.#caretColumn = this.#lines[this.#caretLine].chars.length
+    this.#selectToCaret()
+    this.#changed.selection = true
+    this.#scheduleRefresh()
+  }
+
 
 
   /***************************************************************************
@@ -2034,15 +2149,7 @@ class MuchText extends HTMLElement {
   }
 
   #keyModA(ev) {
-    if(this.#selection) this.clearSelection()
-    const caretLine = this.#caretLine
-    const caretColumn = this.#caretColumn
-    this.#caretLine = 0
-    this.#caretColumn = 0
-    this.#startSelection()
-    this.#caretLine = this.#lines.length-1
-    this.#caretColumn = this.#lines[this.#caretLine].chars.length
-    this.#selectToCaret()
+    this.#selectAll()
   }
 
   #keyModC(ev) {
@@ -2105,14 +2212,15 @@ class MuchText extends HTMLElement {
 
   #openContextMenu(ev) {
     ev.preventDefault()
-    const x = ev.clientX - this.#contentBox.left
-    const y = ev.clientY - this.#contentBox.top
+    const x = ev.clientX //- this.#contentBox.left
+    const y = ev.clientY //- this.#contentBox.top
     const ctxMenu = this.#elements.ctxMenu
     ctxMenu.style.left = `${x}px`
     ctxMenu.style.top = `${y}px`
     this.#ctxMenuOpen = true
     this.#elements.doc.append(ctxMenu)
     this.#elements.ctxPaste.classList.add('enabled')
+    this.#elements.ctxSelectAll.classList.add('enabled')
     if(this.#history.index > 0) {
       this.#elements.ctxUndo.classList.add('enabled')
     } else {
@@ -2168,6 +2276,11 @@ class MuchText extends HTMLElement {
   #contextMenuRedo(ev) {
     if(!this.#elements.ctxRedo.classList.contains('enabled')) return
     this.#redo()
+  }
+
+  #contextMenuSelectAll(ev) {
+    if(!this.#elements.ctxSelectAll.classList.contains('enabled')) return
+    this.#selectAll()
   }
 
 }
