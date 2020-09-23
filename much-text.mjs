@@ -1258,13 +1258,27 @@ class MuchText extends HTMLElement {
     if(history.index < history.buffer.length) {
       history.buffer.splice(history.index, history.buffer.length - history.index)
     }
-    const isOpen = action == 'typing'
-    const entry = {type, range, text, action, open: isOpen}
-    history.buffer.push(entry)
-    if(history.length > this.#config.cfgUndoDepth)
-      history.buffer.shift()
-    else
-      history.index++
+    const last = history.buffer[history.index-1]
+    if(history.index > 0 && action == 'insertText' && last?.action == 'insertText' &&
+       last?.open && last?.range.endLine == range.startLine && last?.range.endColumn == range.startColumn) {
+      last.text += text
+      last.range.endLine = range.endLine
+      last.range.endColumn = range.endColumn
+    } else if(history.index > 0 && action == 'deleteContentBackward' && last?.action == 'deleteContentBackward' &&
+       last?.open && last?.range.startLine == range.endLine && last?.range.startColumn == range.endColumn) {
+      last.text = text + last.text
+      last.range.startLine = range.startLine
+      last.range.startColumn = range.startColumn
+    } else {
+      if(last) last.open = false
+      const isOpen = action == 'insertText' || action == 'deleteContentBackward'
+      const entry = {type, range, text, action, open: isOpen}
+      history.buffer.push(entry)
+      if(history.length > this.#config.cfgUndoDepth)
+        history.buffer.shift()
+      else
+        history.index++
+    }
   }
 
   /** Revert to previous state in history buffer. */
@@ -1273,6 +1287,7 @@ class MuchText extends HTMLElement {
     if(history.index == 0)
       return
     const entry = history.buffer[history.index-1]
+    entry.open = false
     history.index--
     if(entry.type == 'insert') {
       this.deleteRange(entry.range, true, 'historyUndo')
@@ -1287,6 +1302,7 @@ class MuchText extends HTMLElement {
     if(history.index >= history.buffer.length)
       return
     const entry = history.buffer[history.index]
+    entry.open = false
     history.index++
     if(entry.type == 'insert') {
       this.insertAt(entry.range.startLine, entry.range.startColumn, entry.text, true, 'historyRedo')
