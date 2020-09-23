@@ -974,9 +974,13 @@ class MuchText extends HTMLElement {
   }
 
   async #clipboardPaste() {
-    if(this.#selection) this.deleteSelection()
     const text = await navigator.clipboard.readText()
-    this.insert(text, 'insertFromPaste')
+    if(this.#selection) {
+      this.replaceRange(this.#selection, text, true, 'insertFromPaste')
+      this.clearSelection()
+    } else {
+      this.insert(text, 'insertFromPaste')
+    }
   }
 
 
@@ -1114,7 +1118,7 @@ class MuchText extends HTMLElement {
    *
    * The caret is optionally moved to the start of the deleted range.
    */
-  deleteRange(range, moveCaret=true, inputType='deleteContent') {
+  deleteRange(range, moveCaret=true, inputType='deleteContent', isReplacing=false) {
     const {startLine,startColumn,endLine,endColumn} = range
     if(startLine==endLine && startColumn==endColumn) return
     const text = this.getRange(range)
@@ -1182,7 +1186,7 @@ class MuchText extends HTMLElement {
       endLine: startLine,
       endColumn: startColumn,
     }
-    this.#addHistoryEntry('delete', range, text, inputType)
+    this.#addHistoryEntry(isReplacing ? 'replace' : 'delete', range, text, inputType)
     const ev = new MuchInputEvent('input', {
       affectedRange,
       extendedRange: this.findExtendedRange(affectedRange),
@@ -1235,6 +1239,12 @@ class MuchText extends HTMLElement {
     return this.#lines.slice(0,row).reduce((acc,x) => acc+x.chars.length+1, 0) + col
   }
 
+  /** Replace text in a range as a single operation in the undo history. */
+  replaceRange(range, text, moveCaret, inputType) {
+    this.deleteRange(range, false, 'deleteContent', true)
+    this.insertAt(range.startLine, range.startColumn, text, true, moveCaret, inputType)
+  }
+
 
 
   /***************************************************************************
@@ -1275,9 +1285,11 @@ class MuchText extends HTMLElement {
       last.text += text
       last.range.endLine = range.endLine
       last.range.endColumn = range.endColumn
+    } else if(last?.type == 'replace') {
+      last.replacement = {type, range, text, action, open: false, replacement: null}
     } else {
       if(last) last.open = false
-      const entry = {type, range, text, action, open: true}
+      const entry = {type, range, text, action, open: true, replacement: null}
       history.buffer.push(entry)
       if(history.length > this.#config.cfgUndoDepth)
         history.buffer.shift()
@@ -1298,6 +1310,9 @@ class MuchText extends HTMLElement {
       this.deleteRange(entry.range, true, 'historyUndo')
     } else if(entry.type == 'delete') {
       this.insertAt(entry.range.startLine, entry.range.startColumn, entry.text, true, 'historyUndo')
+    } else if(entry.type == 'replace') {
+      this.deleteRange(entry.replacement.range, true, 'historyUndo')
+      this.insertAt(entry.range.startLine, entry.range.startColumn, entry.text, true, 'historyUndo')
     }
   }
 
@@ -1313,6 +1328,9 @@ class MuchText extends HTMLElement {
       this.insertAt(entry.range.startLine, entry.range.startColumn, entry.text, true, 'historyRedo')
     } else if(entry.type == 'delete') {
       this.deleteRange(entry.range, true, 'historyRedo')
+    } else if(entry.type == 'replace') {
+      this.deleteRange(entry.range, true, 'historyUndo')
+      this.insertAt(entry.range.replacement.startLine, entry.range.replacement.startColumn, entry.replacement.text, true, 'historyUndo')
     }
   }
 
@@ -2105,9 +2123,12 @@ class MuchText extends HTMLElement {
 
   #keyEnter(ev) {
     if(this.#config.readOnly) return
-    if(this.#selection)
-      this.deleteSelection()
-    this.insert('\n', 'insertLineBreak')
+    if(this.#selection) {
+      this.replaceRange(this.#selection, '\n', true, 'insertLineBreak')
+      this.clearSelection()
+    } else {
+      this.insert('\n', 'insertLineBreak')
+    }
   }
 
   #keyBackspace(ev) {
@@ -2254,8 +2275,12 @@ class MuchText extends HTMLElement {
 
   #keyTextInput(ev) {
     if(this.#config.readOnly) return 
-    if(this.#selection) this.deleteSelection()
-    this.insert(ev.key, 'insertText')
+    if(this.#selection) {
+      this.replaceRange(this.#selection, ev.key, true, 'insertText')
+      this.clearSelection()
+    } else {
+      this.insert(ev.key, 'insertText')
+    }
   }
 
 
