@@ -259,6 +259,9 @@ class MuchInputEvent extends InputEvent {
 */
 
 class MuchText extends HTMLElement {
+  static formAssociated = true
+
+  #internals
   #config
   #lines
   #selection
@@ -283,6 +286,7 @@ class MuchText extends HTMLElement {
 
   constructor() {
     super()
+    this.#internals = this.attachInternals()
     this.#config = {
       lineWrap     : true,
       lineNums     : false,
@@ -652,6 +656,17 @@ class MuchText extends HTMLElement {
     }
   }
 
+  get value() { return this.textContent }
+  set value(x) { this.setText(x) }
+  get form() { return this.#internals.form; }
+  get name() { return this.getAttribute('name'); }
+  get type() { return this.localName; }
+  get validity() {return this.#internals.validity }
+  get validationMessage() {return this.#internals.validationMessage }
+  get willValidate() {return this.#internals.willValidate }
+
+  checkValidity() { return this.#internals.checkValidity() }
+  reportValidity() {return this.#internals.reportValidity() }
 
 
   /***************************************************************************
