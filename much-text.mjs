@@ -250,6 +250,57 @@ function mkLineSel2(top, from, to, margin) {
   return e
 }
 
+/** Advance a (row, col) position by the length of a range.
+ *
+ * Used for moving annotations after an insertion.
+ */
+function pushForward(row, col, range, cols=Infinity) {
+  if(row < range.startLine || (row == range.startLine && col < range.startColumn))
+    return [row, col]
+  let n = range.endLine - range.startLine
+  let m = range.endColumn - range.startColumn
+  let r = row == range.startLine ? [row + n, col + m] : [row + n, col]
+  if(r[1] > cols) {
+    r[0] += 1
+    r[1] -= cols
+  }
+  return r
+}
+
+function pushRangeForward(a, b, cols=Infinity) {
+  let start = pushForward(a.startLine, a.startColumn, b, cols)
+  let end = pushForward(a.endLine, a.endColumn, b, cols)
+  return {startLine: start[0], startColumn: start[1], 
+    endLine: end[0], endColumn: end[1]}
+}
+
+function pullBack(row, col, range, cols=Infinity) {
+  let rel = MuchText.relativePlacement(row, col, range)
+  if(rel < 0)
+    return [row, col]
+  else if(rel == 0)
+    return [range.startLine, range.startColumn]
+  let n = range.endLine - range.startLine
+  let m = range.endColumn - range.startColumn
+  let r = row == range.endLine ? [row - n, col - m] : [row - n, col]
+  if(r[1] > cols) {
+    r[0] += 1
+    r[1] -= cols
+  }
+  return r
+}
+
+function pullRangeBack(a, b, cols=Infinity) {
+  let start = pullBack(a.startLine, a.startColumn, b, cols)
+  let end = pullBack(a.endLine, a.endColumn, b, cols)
+  if(start[0] == end[0] && start[1] == end[1])
+    return null
+  return {startLine: start[0], startColumn: start[1], 
+    endLine: end[0], endColumn: end[1]}
+}
+
+
+
 class MuchInputEvent extends InputEvent {
   affectedRange
   extendedRange
@@ -304,6 +355,7 @@ class MuchText extends HTMLElement {
     this.#internals = this.attachInternals()
     this.#config = {
       lineWrap      : true,
+      hardWrap      : false,
       lineNums      : false,
       altLines      : 'off',
       disabled      : false,
@@ -332,7 +384,7 @@ class MuchText extends HTMLElement {
       bottom: 1,
       width:  1,
       height: 1,
-      cols:   1,
+      cols:   80,
       rows:   1,
     }
     this.#visibleRegion = {
@@ -646,8 +698,21 @@ class MuchText extends HTMLElement {
       else if(val == 'off') this.#toggleBoundary(false)
       break
     case 'wrap':
-      if(val == 'soft') this.#enableLineWrap()
-      else if(val == 'off') this.#disableLineWrap()
+      if(val == 'hard') {
+         this.#config.hardWrap = true
+         this.#config.lineWrap = false
+         this.#elements.doc.classList.remove('no-wrap')
+      } else if(val == 'soft') {
+         this.#config.hardWrap = false
+         this.#config.lineWrap = true
+         this.#elements.doc.classList.remove('no-wrap')
+      } else if(val == 'off') {
+         this.#config.hardWrap = false
+         this.#config.lineWrap = false
+         this.#elements.doc.classList.add('no-wrap')
+      }
+      this.#changed.wrapMode = true
+      this.#scheduleRefresh()
       break
     case 'row-navigation':
       if(val == 'row')       this.#config.rowNavigation = true
@@ -786,6 +851,16 @@ class MuchText extends HTMLElement {
       return 0
   }
 
+  /** Get the number of lines and columns spanned by a range. 
+   *
+   * A span is represented as a `[lines, cols]` pair. `lines` counts the number
+   * of line breaks within the range. `cols` is the difference between the
+   * start and end columns, it is negative if the start column is greater. 
+   */
+  static rangeSpan(range) {
+    return [range.endLine - range.startLine, range.endColumn - range.startColumn]
+  }
+
 
 
   /***************************************************************************
@@ -821,17 +896,11 @@ class MuchText extends HTMLElement {
   }
 
   get wrap() {
-    return this.#config.lineWrap ? 'soft' : 'off'
+    return this.#config.hardWrap ? 'hard' 
+         : this.#config.lineWrap ? 'soft' : 'off'
   }
 
-  set wrap(x) {
-    if(x=='soft')
-      this.#enableLineWrap()
-    else if(x=='off')
-      this.#disableLineWrap()
-    if(this.hasAttribute('wrap'))
-      this.setAttribute('wrap', x)
-  }
+  set wrap(x) { this.setAttribute('wrap', x) }
 
   get lineNums() {
     return this.#config.lineNums ? 'on' : 'off'
@@ -1053,11 +1122,31 @@ class MuchText extends HTMLElement {
     }
     // Update line data
     const line = this.#lines[row]
+    const next = this.#lines[row+1]
     const rest = line.chars.slice(col)
     const zone = this.findExtendedRange({startLine:row,startColumn:col,endLine:row,endColumn:col})
     const ranges = line.ranges.filter(r => !(r.endLine == row && r.endColumn < col))
     const textLines = text.split('\n')
+    const cols = this.#textBox.cols
     line.chars.splice(col, rest.length, ...Array.from(textLines[0]))
+    if(this.#config.hardWrap) {
+      for(let i=1; i<textLines.length; i++) {
+        let ln = textLines[i]
+        if(ln.length > cols) {
+          const rem = ln.slice(cols)
+          ln = ln.slice(0, cols)
+          textLines[i] = ln
+          textLines.splice(i+1, 0, rem)
+        }
+      }
+      let extras = []
+      while(line.chars.length > cols) {
+        let chars = line.chars.slice(cols, cols*2)
+        extras.push(chars.join(''))
+        line.chars.splice(cols, cols)
+      }
+      textLines.splice(0, 0, ...extras)
+    }
     line.dirty = true
     const newLines = textLines.slice(1).map((str, i) => ({
       chars:   Array.from(str),
@@ -1066,54 +1155,88 @@ class MuchText extends HTMLElement {
       ranges:  ranges.slice(),
     }))
     this.#lines.splice(row+1, 0, ...newLines)
-    const last = this.#lines[row+newLines.length]
+    let last = this.#lines[row+newLines.length]
     last.chars.splice(last.chars.length, 0, ...rest)
     if(newLines.length > 0) last.element.append(rest.join(''))
-    const nLines = newLines.length
-    const lastLen = textLines[textLines.length-1].length
+    let lastLen = textLines[textLines.length-1].length
+    let nLines = newLines.length
     const tailPosition = [row + nLines, nLines > 0 ? lastLen : col + lastLen]
+    let hardTail = false
+    let shiftNext = 0
+    let newLineRegion = null
+    let tailLine = null
+    if(this.#config.hardWrap && last.chars.length > cols) {
+      hardTail = true
+      const rem = last.chars.slice(cols)
+      last.chars.splice(cols, rem.length)
+      tailLine = {
+        chars:   rem,
+        dirty:   true,
+        element: createElement('div', {className: 'line', innerText: rem.join('')}),
+        ranges:  last.ranges.slice(),
+      }
+      this.#lines.splice(row + nLines + 1, 0, tailLine)
+      last.element.innerText = last.chars.join('')
+      newLines.push(tailLine)
+      newLineRegion = {
+        startLine: tailPosition[0],
+        startColumn: this.#lines[tailPosition[0]].chars.length,
+        endLine: tailPosition[0] + 1,
+        endColumn: 0,
+      }
+    }
 
     // Update ranges
-    for(let range of this.ranges) {
-      if(range.startLine == row && range.startColumn >= col) {
-        if(textLines.length == 1) {
-          range.startColumn += textLines[0].length
-        } else {
-          range.startLine += nLines
-          range.startColumn = textLines[0].length + (range.startColumn - col)
-          line.ranges.splice(line.ranges.indexOf(range),1)
-        }
-      } else if(range.startLine > row) {
-        range.startLine += nLines
-      }
-      if(range.endLine == row && range.endColumn > col) {
-        if(textLines.length == 1) {
-          range.endColumn += textLines[0].length
-        } else {
-          range.endLine += nLines
-          range.endColumn = textLines[0].length + (range.endColumn - col)
-          if(range.startLine == row && range.startColumn >= col)
-            line.ranges.splice(line.ranges.indexOf(range),1)
-        }
-      } else if(range.endLine > row) {
-        range.endLine += nLines
-      }
-    }
-
-    // Update DOM
-    if(updateSlot) {
-      const offset = this.#lines.slice(0,row).reduce((acc,x) => acc+x.chars.length+1, 0) + col
-      this.#elements.textNode.insertData(offset, text)
-    }
-    //  this.#updatedSlot = true
-    //}
     const affectedRange = {
       startLine: row,
       startColumn: col,
       endLine: tailPosition[0],
       endColumn: tailPosition[1],
     }
-    this.#addHistoryEntry('insert', affectedRange, text, inputType)
+    let i = 0
+    while(i < this.ranges.length) {
+      const annotation = this.ranges[i]
+      let newRange = pushRangeForward(annotation, affectedRange)
+      annotation.startLine   = newRange.startLine
+      annotation.startColumn = newRange.startColumn
+      annotation.endLine     = newRange.endLine
+      annotation.endColumn   = newRange.endColumn
+      if(hardTail) {
+        newRange = pushRangeForward(annotation, newLineRegion)
+        annotation.startLine   = newRange.startLine
+        annotation.startColumn = newRange.startColumn
+        annotation.endLine     = newRange.endLine
+        annotation.endColumn   = newRange.endColumn
+        last.ranges = last.ranges.filter(r => r.startLine <= tailPosition[0])
+        tailLine.ranges = tailLine.ranges.filter(r => r.endLine > tailPosition[0])
+      }
+      i++
+    }
+
+    // Update DOM
+    if(updateSlot) {
+      const offset = this.#lines.slice(0,row).reduce((acc,x) => acc+x.chars.length+1, 0) + col
+      const txt = textLines.join('\n')
+      this.#elements.textNode.insertData(offset, txt)
+      if(hardTail) {
+        const tailOffset = this.#lines.slice(row,tailPosition[0]+1).reduce((acc,x) => acc+x.chars.length+1, 0) 
+        this.#elements.textNode.insertData(offset - col + tailOffset, '\n')
+
+      }
+    }
+    //  this.#updatedSlot = true
+    //}
+    let after = !hardTail ? null : {
+      action: 'insertLineBreak',
+      type:   'insert',
+      text:   '\n',
+      range: newLineRegion,
+    }
+    this.#addHistoryEntry('insert', affectedRange, text, inputType, after)
+    if(hardTail) {
+      affectedRange.endLine = newLineRegion.endLine
+      affectedRange.endColumn = newLineRegion.endColumn
+    } 
     const ev = new MuchInputEvent('input', {
       affectedRange,
       extendedRange: MuchText.mergeRanges(zone, this.findExtendedRange(affectedRange)),
@@ -1135,7 +1258,7 @@ class MuchText extends HTMLElement {
     })
     this.dispatchEvent(ev)
     line.element.after(...newLines.map(x => x.element))
-    if(nLines > 0) {
+    if(newLines.length > 0) {
       this.#changed.lineCount = true
     }
     this.#changed.textContent = true
@@ -1162,6 +1285,7 @@ class MuchText extends HTMLElement {
     this.#elements.textNode.deleteData(offset, len)
     const start = this.#lines[startLine]
     const end = this.#lines[endLine]
+    const startLen = start.chars.length
     if(nLines == 0) {
       if(endColumn - startColumn == 0) return
       start.chars.splice(startColumn, endColumn-startColumn)
@@ -1173,40 +1297,64 @@ class MuchText extends HTMLElement {
       this.#lines.slice(startLine+1, endLine+1).forEach(e => e.element.remove())
       this.#lines.splice(startLine+1, nLines)
       start.dirty = true
-      if(this.#lines.length > startLine+1) {
+      if(this.#lines.length > startLine+1)
         this.#lines[startLine+1].dirty = true
-      }
+      for(let r of end.ranges) 
+        if(!start.ranges.includes(r))
+          start.ranges.push(r)
       this.#changed.lineCount = true
     }
+    let hardTail = false
+    let tailLine = null
+    const cols = this.#textBox.cols
+    if(this.#config.hardWrap && start.chars.length > cols) {
+      hardTail = true
+      const newLineOffset = offset - startColumn + cols
+      this.#elements.textNode.insertData(newLineOffset, '\n')
+      const rem = start.chars.slice(cols)
+      start.chars.splice(cols, rem.length)
+      tailLine = {
+        chars:   rem,
+        dirty:   true,
+        element: createElement('div', {className: 'line', innerText: rem.join('')}),
+        ranges:  start.ranges.slice(),
+      }
+      this.#lines.splice(startLine + 1, 0, tailLine)
+      start.element.innerText = start.chars.join('')
+      start.element.after(tailLine.element)
+    }
 
+    const newLineRegion = {
+      startLine,
+      startColumn: start.chars.length,
+      endLine: startLine+1,
+      endColumn: 0,
+    }
     // Update annotations
     let i = 0
     while(i < this.ranges.length) {
-      let annot = this.ranges[i]
-      const relStart = MuchText.relativePlacement(annot.startLine, annot.startColumn, range)
-      const relEnd = MuchText.relativePlacement(annot.endLine, annot.endColumn, range)
-      if(relEnd < 0) {
-        i++
-      } else if(relEnd == 0 && relStart < 0) {
-        annot.endLine = range.startLine
-        annot.endColumn = range.startColumn
-        i++
-      } else if(relEnd == 0 && relStart == 0) {
+      const annotation = this.ranges[i]
+      let newRange = pullRangeBack(annotation, range)
+      if(newRange == null) {
         this.ranges.splice(i, 1)
-      } else if(relEnd > 0 && relStart < 0) {
-        annot.endLine -= nLines
-        if(annot.endLine == range.endLine) 
-          annot.endColumn -= range.endColumn
+        start.ranges.splice(start.ranges.indexOf(annotation), 1)
+      } else {
+        annotation.startLine   = newRange.startLine
+        annotation.startColumn = newRange.startColumn
+        annotation.endLine     = newRange.endLine
+        annotation.endColumn   = newRange.endColumn
+        if(hardTail) {
+          newRange = pushRangeForward(annotation, newLineRegion)
+          annotation.startLine   = newRange.startLine
+          annotation.startColumn = newRange.startColumn
+          annotation.endLine     = newRange.endLine
+          annotation.endColumn   = newRange.endColumn
+        }
         i++
-      } else if(relEnd > 0 && relStart == 0) {
-        annot.startLine = range.startLine
-        annot.startColumn = range.startColumn
-        annot.endLine -= nLines
-        if(annot.endLine == range.endLine) 
-          annot.endColumn -= range.endColumn
-        i++
-      } else if(relEnd > 0 && relStart > 0) {
-        break
+      }
+      if(hardTail) {
+        start.ranges = start.ranges.filter(r => r.startLine <= startLine)
+        tailLine.ranges = tailLine.ranges.filter(r => r.endLine > startLine)
       }
     }
     if(moveCaret) 
@@ -1215,10 +1363,16 @@ class MuchText extends HTMLElement {
     const affectedRange = {
       startLine,
       startColumn,
-      endLine: startLine,
-      endColumn: startColumn,
+      endLine: hardTail ? newLineRegion.endLine : startLine,
+      endColumn: hardTail ? newLineRegion.endColumn : startColumn,
     }
-    this.#addHistoryEntry(isReplacing ? 'replace' : 'delete', range, text, inputType)
+    const after = !hardTail ? null : {
+      action: 'insertLineBreak',
+      type:   'insert',
+      text:   '\n',
+      range:  newLineRegion,
+    }
+    this.#addHistoryEntry(isReplacing ? 'replace' : 'delete', range, text, inputType, after)
     const ev = new MuchInputEvent('input', {
       affectedRange,
       extendedRange: this.findExtendedRange(affectedRange),
@@ -1290,7 +1444,7 @@ class MuchText extends HTMLElement {
 
 
   /** Record an action in the undo buffer. */
-  #addHistoryEntry(type, range, text, action) {
+  #addHistoryEntry(type, range, text, action, after=null) {
     if(action == 'reset') {
       this.#history.index = 0
       this.#history.buffer.splice(0, this.#history.buffer.length)
@@ -1321,10 +1475,10 @@ class MuchText extends HTMLElement {
       last.range.endLine = range.endLine
       last.range.endColumn = range.endColumn
     } else if(last?.type == 'replace') {
-      last.replacement = {type, range, text, action, open: false, replacement: null}
+      last.replacement = {type, range, text, action, after, open: false, replacement: null}
     } else {
       if(last) last.open = false
-      const entry = {type, range, text, action, open: true, replacement: null}
+      const entry = {type, range, text, action, after, open: true, replacement: null}
       history.buffer.push(entry)
       if(history.length > this.#config.cfgUndoDepth)
         history.buffer.shift()
@@ -1341,6 +1495,9 @@ class MuchText extends HTMLElement {
     const entry = history.buffer[history.index-1]
     entry.open = false
     history.index--
+    if(entry.after) {
+      this.deleteRange(entry.after.range, true, 'historyUndo')
+    }
     if(entry.type == 'insert') {
       this.deleteRange(entry.range, true, 'historyUndo')
     } else if(entry.type == 'delete') {
@@ -1367,6 +1524,11 @@ class MuchText extends HTMLElement {
       this.deleteRange(entry.range, true, 'historyUndo')
       this.insertAt(entry.range.replacement.startLine, entry.range.replacement.startColumn, entry.replacement.text, true, 'historyUndo')
     }
+    // not needed: 'after' only ever means hard wrapping which will be handled anyway
+    //if(entry.after) {
+    //  const aft = entry.after
+    //  this.insertAt(aft.range.startLine, aft.range.startColumn, aft.text, true, 'historyRedo')
+    //}
   }
 
 
@@ -1435,7 +1597,10 @@ class MuchText extends HTMLElement {
     for(let k=region.startLine; k<=min(this.#lines.length-1, region.endLine); k++)
       this.#lines[k].ranges = this.#lines[k].ranges.filter(r =>
         r.startLine < region.startLine ||
-        (r.startLine == region.startLine && r.startColumn < region.startColumn))
+        (r.startLine == region.startLine && r.startColumn < region.startColumn) ||
+        r.startLine > region.endLine ||
+        (r.startLine == region.endLine && r.startColumn > region.endColumn) 
+      )
     
     while(i < newRanges.length || j < oldRanges.length) {
       let rNew     = newRanges[i]
@@ -1836,7 +2001,7 @@ class MuchText extends HTMLElement {
   #updateStyles() {
     const style  = this.#elements.doc.style
     const margin = this.#marginWidth
-    const wrap   = this.#config.lineWrap
+    const wrap   = this.#config.lineWrap || this.#config.hardWrap
     const cBox   = this.#contentBox
     const tBox   = this.#textBox
 
