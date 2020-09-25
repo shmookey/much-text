@@ -45,9 +45,12 @@ much-text {
 #panel .settings {
   display: grid;
   width: 90%;
-  grid-template-columns: 2fr 1fr;
+  grid-template-columns: 3fr 2fr;
   grid-auto-flow: dense;
   row-gap: 10px;
+}
+#panel .settings.attributes label {
+  font-family: monospace;
 }
 #panel .settings label {
   grid-column: 1;
@@ -150,6 +153,8 @@ async function loadReadme() {
 }
 let readmePromise = loadReadme()
 window.onload = async () => {
+  let enableAnnotator = true
+
   eInput = document.querySelector('much-text')
   const eSplash = document.querySelector('#splash')
   const eError = document.querySelector('#splash .error')
@@ -160,6 +165,7 @@ window.onload = async () => {
   const eReadOnly = document.querySelector('#panel select[name="read-only"]')
   const eDisabled = document.querySelector('#panel select[name="disabled"]')
   const eCols     = document.querySelector('#panel input[name="cols"]')
+  const eAnnotator = document.querySelector('#panel select[name="annotator"]')
   const eShowBoundary = document.querySelector('#panel select[name="show-boundary"]')
   eWrapMode.addEventListener('change', ev => {
     eInput.wrap = eWrapMode.value
@@ -189,12 +195,18 @@ window.onload = async () => {
     eInput.showBoundary = eShowBoundary.value
     updateExample()
   })
+  eAnnotator.addEventListener('change', ev => {
+    enableAnnotator = eAnnotator.value == 'markdown'
+  })
+  eAnnotator.value = 'markdown'
 
 
   function updateExample() {
     const attrs = []
     if(eInput.wrap == 'soft')
       attrs.push('wrap="soft"')
+    else if(eInput.wrap == 'hard')
+      attrs.push('wrap="hard"')
     if(eInput.lineNums == 'on')
       attrs.push('line-nums="on"')
     if(eInput.readOnly == 'true')
@@ -237,7 +249,6 @@ window.onload = async () => {
     eInput.setText(text)
 //    eInput.focus()
     updateExample()
-
     function highlight(region) {
       const result = annotate(eInput.textContent, region)
       const ranges = result.ranges
@@ -253,7 +264,7 @@ window.onload = async () => {
     eInput.addEventListener('input', ev => {
       if(DEBUG) console.log(`[annotator] input detected at ${formatRange(ev.affectedRange)}`)
       if(DEBUG) console.log(`[annotator] reprocessing extended range ${formatRange(ev.extendedRange)}`)
-      highlight(ev.extendedRange)
+      if(enableAnnotator) highlight(ev.extendedRange)
     })
   }, err => {
     eError.style.display = 'block'
@@ -273,46 +284,55 @@ window.onload = async () => {
   autofocus='true'
   line-nums='on'
   line-contrast='lines'
-  cols='100'
+  cols='80'
   show-boundary='column'
   placeholder='This is a placeholder...'
 ></much-text>
 <div id='panel'>
   <div class='title'>much-text</div>
-  <div class='heading'>Options</div>
-  <div class='settings'>
-    <label>Wrap lines</label>
+  <div class='heading'>Attributes</div>
+  <div class='settings attributes'>
+    <label>wrap</label>
     <select name='wrap'>
-      <option>soft</option>
       <option>off</option>
+      <option>soft</option>
+      <option>hard</option>
     </select>
-    <label>Show line numbers</label>
+    <label>line-nums</label>
     <select name='line-nums'>
       <option>on</option>
       <option>off</option>
     </select>
-    <label>Line contrast</label>
+    <label>line-contrast</label>
     <select name='line-contrast'>
       <option>lines</option>
       <option>rows</option>
       <option>off</option>
     </select>
-    <label>Read only</label>
+    <label>readonly</label>
     <select name='read-only'>
       <option>true</option>
       <option>false</option>
     </select>
-    <label>Disabled</label>
+    <label>disabled</label>
     <select name='disabled'>
       <option>true</option>
       <option>false</option>
     </select>
-    <label>Columns</label>
+    <label>cols</label>
     <input type='text' name='cols' value='80' />
-    <label>Show boundary</label>
+    <label>show-boundary</label>
     <select name='show-boundary'>
       <option>column</option>
       <option>off</option>
+    </select>
+  </div>
+  <div class='heading'>Options</div>
+  <div class='settings'>
+    <label>Annotator</label>
+    <select name='annotator'>
+      <option>off</option>
+      <option>markdown</option>
     </select>
   </div>
   <div class='heading'>HTML</div>

@@ -12,6 +12,8 @@ function annotate(text, region) {
   let curCol  = 0
   if(region) {
     curChar = region.startOffset - region.startColumn // Always start at beginning of line
+    region.startOffset -= region.startColumn
+    region.startColumn = 0
     curLine = region.startLine
     curCol  = 0
     //region.endLine += 1 // Always check out the next line in case there's a heading
