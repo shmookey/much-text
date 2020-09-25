@@ -18,37 +18,42 @@ function formatKeyCombo(isMod, isShift, key) {
 
 const cssSource = `
 :root {
-  --line-width:     80ch;
-  --line-min-width: 80ch;
-  --dead-width:     100%;
-  --margin-width:   50px;
-  --boundary-left:  0px;
 }
 * {
   box-sizing:      border-box;
 }
 :host {
-  display:         block;
-  appearance:      textfield;
+  display:         inline-block;
+  appearance:      textarea;
   border:          1px solid #707070;
   overflow:        auto auto;
-  /*font-family:     Consolas,Monaco,Lucida Console,Liberation Mono,DejaVu Sans Mono,Bitstream Vera Sans Mono,Courier New, monospace, serif;*/
-  font-family:     monospace;
+  font-family:     Consolas,Monaco,Lucida Console,Liberation Mono,DejaVu Sans Mono,Bitstream Vera Sans Mono,Courier New, monospace, serif;
+  font-size:       13px;
+  /*font-family:     monospace;
+  font: 400 13.3333px Arial;*/
   font-kerning:    none;
   hanging-punctuation: none;
   font-variant-numeric: tabular-nums;
+  resize:          auto;
+  cursor:          text;
 }
 slot {
   display:         none;
 }
 #doc {
-  cursor:          text;
+  --line-width:     80ch;
+  --line-min-width: 80ch;
+  --dead-width:     100%;
+  --margin-width:   50px;
+  --boundary-left:  0px;
+  --line-height:    (15px);
+  padding-top:     2px;
   user-select:     none;
   position:        relative;
   display:         grid;
   outline:         none;
   overflow-x:      hidden;
-  grid-auto-rows:  minmax(calc(1em + 1ex), min-content);
+  grid-auto-rows:  minmax(calc(var(--line-height)), min-content);
   grid-auto-flow:  dense;
   overflow-wrap:   anywhere;
   white-space:     break-spaces;
@@ -68,7 +73,7 @@ slot {
   width:           fit-content;
 }
 .caret {
-  height:          calc(1em + 1ex);
+  height:          calc(var(--line-height));
   width:           1ch;
   position:        absolute;
   border-left:     1px solid #08080F;
@@ -81,8 +86,8 @@ slot {
   opacity:         0;
 }
 .line-selection {
-  height:          calc(1em + 1ex);
-  backdrop-filter: sepia(60%) invert(100%);
+  height:          calc(var(--line-height));
+  backdrop-filter: sepia(50%) hue-rotate(30deg) invert(100%);
   position:        absolute;
 }
 .line, #placeholder {
@@ -115,7 +120,7 @@ slot {
   visibility:      visible;
 }
 .line, .line-number, .line-overflow, #placeholder {
-  line-height:     calc(1em + 1ex);
+  line-height:     calc(var(--line-height));
   vertical-align:  middle;
 }
 #margin, #overflow-area, #text, .selection {
@@ -237,7 +242,7 @@ function getSlice(doc, startLine, startColumn, endLine, endColumn) {
 /** Create a line selection element. */
 function mkLineSel(line, from, to, margin) {
   const e = createElement('div', {className: 'line-selection'})
-  e.style.top   = `calc(${line} * (1em + 1ex))`
+  e.style.top   = `calc(${line} * calc(var(--line-height)))`
   e.style.left  = `calc(${margin}px + ${from}ch)`
   e.style.width = `calc(${to-from}ch)`
   return e
@@ -545,7 +550,7 @@ class MuchText extends HTMLElement {
       this.#elements.doc,
       this.#elements.slot)
     //this.#enableLineWrap()
-    //this.#disableLineNumbers()
+    this.#disableLineNumbers()
   }
 
   get debug() {
@@ -1741,7 +1746,7 @@ class MuchText extends HTMLElement {
 
     if(to <= width || !this.#config.lineWrap) {
       const e = createElement('div', {className: 'line-selection'})
-      e.style.top   = `calc(${offset.top}px + ${offset.row}*(1em + 1ex))`
+      e.style.top   = `calc(${offset.top}px + ${offset.row} * calc(var(--line-height)))`
       e.style.left  = `calc(${margin}px + ${from}ch)`
       e.style.width = `calc(${to-from}ch)`
       eSelection.appendChild(e)
@@ -1753,7 +1758,7 @@ class MuchText extends HTMLElement {
       for(let i=fromRow; i<=toRow; i++) {
         const right = i<toRow ? width : (to % width)
         const e = createElement('div', {className: 'line-selection'})
-        e.style.top   = `calc(${offset.top}px + ${offset.row}*(1em + 1ex))`
+        e.style.top   = `calc(${offset.top}px + ${offset.row} * calc(var(--line-height)))`
         e.style.left  = `calc(${margin}px + ${left}ch)`
         e.style.width = `calc(${right - left}ch)`
         eSelection.appendChild(e)

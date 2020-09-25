@@ -87,7 +87,10 @@ much-text::part(active-line) {
 much-text::part(caret) {
   border-left: 2px solid #DFDCDF;
 }
-
+much-text::part(line-selection) {
+  backdrop-filter: sepia(60%) invert(100%);
+  background: transparent;
+}
 /* markdown-like highlighting */
 much-text::part(italic) {
   font-style: italic;
@@ -111,7 +114,7 @@ much-text::part(heading-2) {
 much-text::part(code) {
   background: linear-gradient(to right, #44404400 0.5ch, #000000 1ch, #000000 calc(100% - 1ch), #44404400 calc(100% - 0.5ch));
   color:      #FEFE5E;
-  height:     calc(1em + 1ex);
+  height:     15.333px; /*calc(1em + 1ex);*/
   display:    inline-block;
 }
 
@@ -281,7 +284,6 @@ window.onload = async () => {
 <much-text 
   tabindex='0'
   wrap='soft'
-  autofocus='true'
   line-nums='on'
   line-contrast='lines'
   cols='80'
