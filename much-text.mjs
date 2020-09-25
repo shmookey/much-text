@@ -89,6 +89,7 @@ slot {
   height:          calc(var(--line-height));
   backdrop-filter: sepia(50%) hue-rotate(30deg) invert(100%);
   position:        absolute;
+  min-width:       1ch;
 }
 .line, #placeholder {
   grid-column:     2;
@@ -148,16 +149,20 @@ slot {
 #contextMenu {
   position: fixed;
   width: fit-content;
-  background: #E5E5E5;
+  background: white;
   cursor: default;
   color: #808080;
+  border: 1px solid #B0B0B0;
   font-family: system-ui;
-  font-size: 0.8em;
+  font-size: 1.0em;
   padding: 5px 0px;
 }
+#contextMenu:focus {
+  outline: none;
+}
 #contextMenu .item {
-  height: 1.5em;
-  padding: 0.25em 1.1em;
+  height: 25px;
+  padding: 5px 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -185,7 +190,7 @@ slot {
 `
 
 function createContextMenu(items) {
-  const elem = createElement('div', {id: 'contextMenu', part: 'contextMenu'})
+  const elem = createElement('div', {id: 'contextMenu', part: 'contextMenu', tabIndex: 0})
   const itemElems = items.map(item => {
     const e = createElement('div', {className: 'item', part: 'item'})
     switch(item.type) {
@@ -511,6 +516,7 @@ class MuchText extends HTMLElement {
     this.#elements.slot.addEventListener('slotchange',     e => this.#handleSlotChange(e))
     this.#elements.doc.addEventListener('contextmenu',     e => this.#openContextMenu(e))
     this.#elements.ctxMenu.addEventListener('click',       e => {})
+    this.#elements.ctxMenu.addEventListener('blur',        e => this.#closeContextMenu(e))
     this.#elements.ctxMenu.addEventListener('pointerdown', e => this.#contextMenuPointerEvent(e))
     this.#elements.ctxMenu.addEventListener('pointerup',   e => this.#contextMenuPointerEvent(e))
     this.#elements.ctxCopy.addEventListener('click',       e => this.#contextMenuCopy(e))
@@ -2492,8 +2498,8 @@ class MuchText extends HTMLElement {
 
   #openContextMenu(ev) {
     ev.preventDefault()
-    const x = ev.clientX //- this.#contentBox.left
-    const y = ev.clientY //- this.#contentBox.top
+    const x = ev.clientX 
+    const y = ev.clientY 
     const ctxMenu = this.#elements.ctxMenu
     ctxMenu.style.left = `${x}px`
     ctxMenu.style.top = `${y}px`
