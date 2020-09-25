@@ -85,7 +85,7 @@ much-text::part(active-line) {
   background: #444044;
 }
 much-text::part(caret) {
-  border-left: 2px solid #DFDCDF;
+  border-left: 2px solid #EFECEF;
 }
 much-text::part(line-selection) {
   backdrop-filter: sepia(60%) invert(100%);
@@ -170,6 +170,7 @@ window.onload = async () => {
   const eCols     = document.querySelector('#panel input[name="cols"]')
   const eAnnotator = document.querySelector('#panel select[name="annotator"]')
   const eShowBoundary = document.querySelector('#panel select[name="show-boundary"]')
+  const eRowNavigation = document.querySelector('#panel select[name="row-navigation"]')
   eWrapMode.addEventListener('change', ev => {
     eInput.wrap = eWrapMode.value
     updateExample()
@@ -198,6 +199,10 @@ window.onload = async () => {
     eInput.showBoundary = eShowBoundary.value
     updateExample()
   })
+  eRowNavigation.addEventListener('change', ev => {
+    eInput.rowNavigation = eRowNavigation.value
+    updateExample()
+  })
   eAnnotator.addEventListener('change', ev => {
     enableAnnotator = eAnnotator.value == 'markdown'
   })
@@ -222,6 +227,8 @@ window.onload = async () => {
       attrs.push(`line-contrast="${eInput.lineContrast}"`)
     if(eInput.showBoundary == 'column')
       attrs.push('show-boundary="column"')
+    if(eInput.rowNavigation == 'line')
+      attrs.push('row-navigation="line"')
     eExample.innerText = `<much-text ${attrs.join(' ')}></much-text>`
   }
 
@@ -245,6 +252,7 @@ window.onload = async () => {
     eDisabled.value = eInput.disabled.toString()
     eCols.value     = eInput.cols.toString()
     eShowBoundary.value = eInput.showBoundary
+    eRowNavigation.value = eInput.rowNavigation
     let text = await readmePromise
     const lines = text.split('\n')
     lines.splice(2, 6)
@@ -327,6 +335,11 @@ window.onload = async () => {
     <select name='show-boundary'>
       <option>column</option>
       <option>off</option>
+    </select>
+    <label>row-navigation</label>
+    <select name='row-navigation'>
+      <option>row</option>
+      <option>line</option>
     </select>
   </div>
   <div class='heading'>Options</div>
