@@ -16,7 +16,9 @@ function formatKeyCombo(isMod, isShift, key) {
   return buf
 }
 
-const cssSource = `
+// TODO: internally style using parts instead of ids
+const htmlSource = `
+<style>
 :root {
 }
 * {
@@ -72,17 +74,20 @@ slot {
   word-break:      normal;
   width:           fit-content;
 }
-.caret {
+#caret {
+  display:         inline-block;
+  font-family:     Consolas,Monaco,Lucida Console,Liberation Mono,DejaVu Sans Mono,Bitstream Vera Sans Mono,Courier New, monospace, serif;
+  font-size:       13px;
   height:          calc(var(--line-height));
   width:           1ch;
   position:        absolute;
   border-left:     1px solid #08080F;
   opacity:         0;
 }
-#doc:focus .caret {
+#doc:focus #caret {
   opacity:         1;
 }
-#doc.select:focus .caret {
+#doc.select:focus #caret {
   opacity:         0;
 }
 .line-selection {
@@ -117,7 +122,7 @@ slot {
   border-left:     1px dashed #FFFFFF55;
   visibility:      hidden;
 }
-#doc.show-boundary .boundary {
+#doc.show-boundary #boundary {
   visibility:      visible;
 }
 .line, .line-number, .line-overflow, #placeholder {
@@ -187,6 +192,17 @@ slot {
   top:        0;
   background: transparent;
 }
+</style>
+<div id='doc' part='doc' tabindex='0'>
+  <div id='margin' part='margin'></div>
+  <div id='text' part='text'>
+    <div id='placeholder' part='placeholder'></div>
+  </div>
+  <div id='overflow-area' part='overflow-area'></div>
+  <div id='boundary' part='boundary'></div>
+  <div id='caret' part='caret'></div>
+</div>
+<slot></slot>
 `
 
 function createContextMenu(items) {
@@ -422,6 +438,7 @@ class MuchText extends HTMLElement {
       mode:           'open',
       delegatesFocus: true,
     })
+    this.shadowRoot.innerHTML = htmlSource
     const contextMenu = createContextMenu([{
       type:    'action',
       name:    'undo',
@@ -468,15 +485,14 @@ class MuchText extends HTMLElement {
       key:     'A',
     }])
     this.#elements = {
-      doc:          createElement('div',   {id: 'doc', part: 'doc', tabIndex: 0}),
-      margin:       createElement('div',   {id: 'margin', part: 'margin'}),
-      text:         createElement('div',   {id: 'text', part: 'text'}),
-      overflowArea: createElement('div',   {id: 'overflow-area'}),
-      placeholder:  createElement('div',   {id: 'placeholder', part: 'placeholder'}),
-      boundary:     createElement('div',   {className: 'boundary', part: 'boundary'}),
-      caret:        createElement('div',   {className: 'caret', part: 'caret'}),
-      style:        createElement('style', {textContent: cssSource}),
-      slot:         createElement('slot'),
+      doc:          this.shadowRoot.querySelector('#doc'), 
+      margin:       this.shadowRoot.querySelector('#margin'), 
+      text:         this.shadowRoot.querySelector('#text'), 
+      overflowArea: this.shadowRoot.querySelector('#overflow-area'), 
+      placeholder:  this.shadowRoot.querySelector('#placeholder'), 
+      boundary:     this.shadowRoot.querySelector('#boundary'), 
+      caret:        this.shadowRoot.querySelector('#caret'), 
+      slot:         this.shadowRoot.querySelector('slot'), 
       ctxMenu:      contextMenu,
       ctxCut:       contextMenu.querySelector('.cut'), 
       ctxCopy:      contextMenu.querySelector('.copy'), 
@@ -486,18 +502,26 @@ class MuchText extends HTMLElement {
       ctxSelectAll: contextMenu.querySelector('.select-all'), 
       textNode:     new Text(),
     }
+      //doc:          createElement('div',   {id: 'doc', part: 'doc', tabIndex: 0}),
+      //margin:       createElement('div',   {id: 'margin', part: 'margin'}),
+      //text:         createElement('div',   {id: 'text', part: 'text'}),
+      //overflowArea: createElement('div',   {id: 'overflow-area'}),
+      //placeholder:  createElement('div',   {id: 'placeholder', part: 'placeholder'}),
+      //boundary:     createElement('div',   {className: 'boundary', part: 'boundary'}),
+      //caret:        createElement('div',   {className: 'caret', part: 'caret'}),
+      //style:        createElement('style', {textContent: cssSource}),
+      //slot:         createElement('slot'),
     this.#elements.text.append(
       this.#lines[0].element,
-      this.#elements.placeholder,
+    //  this.#elements.placeholder,
     )
     this.#updateLineNumbers()
-    this.#elements.doc.append(
-      this.#elements.margin,
-      this.#elements.text,
-      this.#elements.overflowArea, 
-      this.#elements.boundary,
-      this.#elements.caret)
-    this.append(this.#elements.textNode)
+    //this.#elements.doc.append(
+    //  this.#elements.margin,
+    //  this.#elements.text,
+    //  this.#elements.overflowArea, 
+    //  this.#elements.boundary,
+    //  this.#elements.caret)
     this.#caretBlink = this.#elements.caret.animate({
       visibility: ['visible', 'hidden', 'hidden'],
     }, {
@@ -526,6 +550,9 @@ class MuchText extends HTMLElement {
     this.#elements.ctxRedo.addEventListener('click',       e => this.#contextMenuRedo(e))
     this.#elements.ctxSelectAll.addEventListener('click',  e => this.#contextMenuSelectAll(e))
 
+    this.append(this.#elements.textNode)
+    this.#disableLineNumbers()
+    let firstResize = true
     const resizeObserver = new ResizeObserver(entries => {
       for(let entry of entries) {
         switch(entry.target) {
@@ -551,12 +578,12 @@ class MuchText extends HTMLElement {
     })
     resizeObserver.observe(this)
     resizeObserver.observe(this.#elements.caret)
-    this.shadowRoot.append(
-      this.#elements.style,
-      this.#elements.doc,
-      this.#elements.slot)
+
+    //this.shadowRoot.append(
+    //  this.#elements.style,
+    //  this.#elements.doc,
+    //  this.#elements.slot)
     //this.#enableLineWrap()
-    this.#disableLineNumbers()
   }
 
   get debug() {
@@ -699,7 +726,7 @@ class MuchText extends HTMLElement {
 
   static get observedAttributes() {
     return ['cols', 'wrap', 'line-nums', 'line-contrast', 'placeholder',
-      'disabled', 'readonly', 'show-boundary', 'row-navigation']
+      'disabled', 'readonly', 'show-boundary', 'row-navigation', 'eol-navigation']
   }
 
   attributeChangedCallback(name, old, val) {
@@ -728,6 +755,10 @@ class MuchText extends HTMLElement {
     case 'row-navigation':
       if(val == 'row')       this.#config.rowNavigation = true
       else if(val == 'line') this.#config.rowNavigation = false
+      break
+    case 'eol-navigation':
+      if(val == 'wrap')     this.#config.eolNavigation = true
+      else if(val == 'off') this.#config.eolNavigation = false
       break
     case 'line-nums':
       if(val == 'on') this.#enableLineNumbers()
@@ -883,6 +914,8 @@ class MuchText extends HTMLElement {
 
   get rowNavigation() { return this.#config.rowNavigation ? 'row' : 'line' }
   set rowNavigation(x) { this.setAttribute('row-navigation', x) }
+  get eolNavigation() { return this.#config.eolNavigation ? 'wrap' : 'off' }
+  set eolNavigation(x) { this.setAttribute('eol-navigation', x) }
 
   get placeholder() { return this.#elements.placeholder.textContent }
   set placeholder(x) { this.setAttribute('placeholder', x) }
@@ -1551,7 +1584,7 @@ class MuchText extends HTMLElement {
    ***************************************************************************/
 
 
-  mark(startLine, startColumn, endLine, endColumn, cls) {
+  annotate(startLine, startColumn, endLine, endColumn, cls) {
     // Make sure range is in bounds and not backwards
     startLine = max(0, min(startLine, this.#lines.length-1))
     endLine = max(startLine, min(endLine, this.#lines.length-1))
@@ -1573,7 +1606,7 @@ class MuchText extends HTMLElement {
     }
   }
 
-  clearMarkings() {
+  clearAnnotations() {
     this.ranges = []
     this.#lines.forEach((line,i) => {
       line.ranges.splice(0, line.length)
@@ -1581,14 +1614,14 @@ class MuchText extends HTMLElement {
     })
   }
 
-  /** Efficiently replace the markings that start in a given range.
+  /** Efficiently replace the annotations that start in a given range.
    * 
    * `from` and `to` specify the range of lines (inclusive). The replacements
    *  must be sorted by start position.
    *
-   * Note to self: ensure internal ranges list is kept ordered too! 
+   *  Note: ensure internal ranges list is kept ordered too! 
    */
-  replaceMarkings(region, newRanges) {
+  replaceAnnotations(region, newRanges) {
 
     // Determine existing ranges starting in the given region
     const oldMin = max(0, this.ranges.findIndex(r => 
@@ -1654,11 +1687,11 @@ class MuchText extends HTMLElement {
       }
     }
 
-    this.#changed.markings = true
+    this.#changed.annotations = true
     this.#scheduleRefresh()
   }
 
-  #markingsAt(row, col) {
+  #annotationsAt(row, col) {
     const line = this.#lines[row]
     if(!line) return []
     return line.ranges.filter(r => MuchText.isInRange(row, col, r))
@@ -1666,7 +1699,7 @@ class MuchText extends HTMLElement {
 
   findExtendedRange(range) {
     const start = [range.startLine, range.startColumn]
-    let startMarks = this.#markingsAt(start[0], start[1])
+    let startMarks = this.#annotationsAt(start[0], start[1])
     let newStart = [start[0], start[1]]
     let foundStart = false
     while(!foundStart) {
@@ -1682,11 +1715,11 @@ class MuchText extends HTMLElement {
       } else {
         start[0] = newStart[0]
         start[1] = newStart[1]
-        startMarks = this.#markingsAt(start[0], start[1])
+        startMarks = this.#annotationsAt(start[0], start[1])
       }
     }
     const end = [range.endLine, range.endColumn]
-    let endMarks = this.#markingsAt(end[0], end[1])
+    let endMarks = this.#annotationsAt(end[0], end[1])
     let newEnd = [end[0], end[1]]
     let foundEnd = false
     while(!foundEnd) {
@@ -1702,7 +1735,7 @@ class MuchText extends HTMLElement {
       } else {
         end[0] = newEnd[0]
         end[1] = newEnd[1]
-        endMarks = this.#markingsAt(end[0], end[1])
+        endMarks = this.#annotationsAt(end[0], end[1])
       }
     }
     return {
@@ -1939,9 +1972,9 @@ class MuchText extends HTMLElement {
       refreshVisibleRegion   = true
       changed.cols           = false
     }
-    if(changed.markings) {
+    if(changed.annotations) {
       refreshVisibleContent  = true
-      changed.markings       = false
+      changed.annotations    = false
     }
     if(changed.contentBox) {
       refreshTextBox         = true
@@ -2528,6 +2561,7 @@ class MuchText extends HTMLElement {
   }
 
   #closeContextMenu() {
+    if(!this.#ctxMenuOpen) return
     this.#ctxMenuOpen = false
     this.#elements.ctxMenu.remove()
   }

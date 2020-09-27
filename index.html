@@ -171,6 +171,7 @@ window.onload = async () => {
   const eAnnotator = document.querySelector('#panel select[name="annotator"]')
   const eShowBoundary = document.querySelector('#panel select[name="show-boundary"]')
   const eRowNavigation = document.querySelector('#panel select[name="row-navigation"]')
+  const eEOLNavigation = document.querySelector('#panel select[name="eol-navigation"]')
   eWrapMode.addEventListener('change', ev => {
     eInput.wrap = eWrapMode.value
     updateExample()
@@ -203,6 +204,10 @@ window.onload = async () => {
     eInput.rowNavigation = eRowNavigation.value
     updateExample()
   })
+  eEOLNavigation.addEventListener('change', ev => {
+    eInput.eolNavigation = eEOLNavigation.value
+    updateExample()
+  })
   eAnnotator.addEventListener('change', ev => {
     enableAnnotator = eAnnotator.value == 'markdown'
   })
@@ -229,6 +234,8 @@ window.onload = async () => {
       attrs.push('show-boundary="column"')
     if(eInput.rowNavigation == 'line')
       attrs.push('row-navigation="line"')
+    if(eInput.eolNavigation == 'off')
+      attrs.push('eol-navigation="off"')
     eExample.innerText = `<much-text ${attrs.join(' ')}></much-text>`
   }
 
@@ -253,6 +260,7 @@ window.onload = async () => {
     eCols.value     = eInput.cols.toString()
     eShowBoundary.value = eInput.showBoundary
     eRowNavigation.value = eInput.rowNavigation
+    eEOLNavigation.value = eInput.eolNavigation
     let text = await readmePromise
     const lines = text.split('\n')
     lines.splice(2, 6)
@@ -268,7 +276,7 @@ window.onload = async () => {
       const nHidden = ranges.filter(x => x.hidden).length
       if(DEBUG) console.log(`[annotator] parse results: ${nRanges} annotations (${nHidden} hidden) in range ${formatRange(result.region)}`)
       if(DEBUG) console.log(result)
-      eInput.replaceMarkings(result.region, ranges)
+      eInput.replaceAnnotations(result.region, ranges)
     }
     highlight()
 
@@ -340,6 +348,11 @@ window.onload = async () => {
     <select name='row-navigation'>
       <option>row</option>
       <option>line</option>
+    </select>
+    <label>eol-navigation</label>
+    <select name='eol-navigation'>
+      <option>wrap</option>
+      <option>off</option>
     </select>
   </div>
   <div class='heading'>Options</div>

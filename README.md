@@ -83,6 +83,14 @@ The following new attributes are defined:
                  attribute.
                  Values: column, off
 
+  row-navigation Control whether the up and down arrow keys move by one visual
+                 "row" or one logical "line". Default: row.
+                 Values: row, line
+  
+  eol-navigation Control whether the left and right arrow keys will wrap the
+                 caret onto the previous/next line. Default: wrap.
+                 Values: wrap, off
+
 
 #    STYLING
 
@@ -118,13 +126,17 @@ work out the optimal way of representing the overlap with HTML span elements.
 
 The following functions are available:
 
-  mark(startLine, startColumn, endLine, endColumn, cls)
+  annotate(startLine, startColumn, endLine, endColumn, cls)
     Marks a range of text with the class `cls`.
 
-  clearMarkings(startLine, endLine)
+  clearAnnotations(startLine, endLine)
     Clears all markings that *start* in the range spanning from `startLine` to
     `endLine`, inclusive. If either parameter is not given or `null`, the start
     and end of the document are used.
+
+  replaceAnnotations(region, newAnnotations)
+    Replace the annotations that start in a given range. The replacements must
+    be pre-sorted in annotation order (explained below).
 
 
 #    DIFFERENCES FROM <textarea>
