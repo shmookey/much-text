@@ -827,7 +827,7 @@ class MuchText extends HTMLElement {
   set readonly(x)         { this.setAttribute('readonly', x) }
   get rowNavigation()     { return this.#config.rowNavigation ? 'row' : 'line' }
   set rowNavigation(x)    { this.setAttribute('row-navigation', x) }
-  get showBoundary()      { return this.#config.showBoundary : 'column' : 'off' }
+  get showBoundary()      { return this.#config.showBoundary ? 'column' : 'off' }
   set showBoundary(x)     { this.setAttribute('show-boundary', x) }
   get type()              { return this.localName; }
   get undoDepth()         { return this.#config.undoDepth }
