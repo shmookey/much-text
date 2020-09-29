@@ -25,7 +25,7 @@ const htmlSource = `
   box-sizing:      border-box;
 }
 :host {
-  display:         inline-block;
+  display:         flow-root;
   appearance:      textarea;
   border:          1px solid #707070;
   overflow:        auto auto;
@@ -38,6 +38,7 @@ const htmlSource = `
   font-variant-numeric: tabular-nums;
   resize:          auto;
   cursor:          text;
+  contain:         size layout;
 }
 slot {
   display:         none;
@@ -192,6 +193,24 @@ slot {
   top:        0;
   background: transparent;
 }
+#ruler {
+  position: sticky;
+  left: 0;
+  right: 0;
+  bottom:   0;
+  height:   25px;
+  display:  flex;
+  background: #D0D0D0;
+  font-family: system-ui;
+  padding:     5px 10px;
+  align-items: center;
+  cursor:      default;
+}
+#ruler #status {
+  flex-grow: 1;
+}
+#ruler #position {
+}
 </style>
 <div id='doc' part='doc' tabindex='0'>
   <div id='margin' part='margin'></div>
@@ -204,6 +223,13 @@ slot {
 </div>
 <slot></slot>
 `
+/*<div id='ruler' part='ruler'>
+  <div id='status' part='status'></div>
+  <div id='position' part='position'>
+    <span id='position-line' part='position-line'>0</span>, 
+    <span id='position-row' part='position-row'>0</span>
+  </div>
+</div>*/
 
 function createContextMenu(items) {
   const elem = createElement('div', {id: 'contextMenu', part: 'contextMenu', tabIndex: 0})
@@ -388,9 +414,10 @@ class MuchText extends HTMLElement {
       readOnly      : false,
       showBoundary  : true,
       cols          : null,
-      undoDepth     : 10,
+      undoDepth     : 100,
       rowNavigation : true,
       eolNavigation : true,
+      showRuler     : true,
     }
     this.#history = {
       buffer: [],
@@ -493,6 +520,9 @@ class MuchText extends HTMLElement {
       boundary:     this.shadowRoot.querySelector('#boundary'), 
       caret:        this.shadowRoot.querySelector('#caret'), 
       slot:         this.shadowRoot.querySelector('slot'), 
+      //ruler:        this.shadowRoot.querySelector('#ruler'), 
+      //rulerPosLine: this.shadowRoot.querySelector('#ruler #position-line'), 
+      //rulerPosRow:  this.shadowRoot.querySelector('#ruler #position-row'), 
       ctxMenu:      contextMenu,
       ctxCut:       contextMenu.querySelector('.cut'), 
       ctxCopy:      contextMenu.querySelector('.copy'), 
@@ -502,26 +532,8 @@ class MuchText extends HTMLElement {
       ctxSelectAll: contextMenu.querySelector('.select-all'), 
       textNode:     new Text(),
     }
-      //doc:          createElement('div',   {id: 'doc', part: 'doc', tabIndex: 0}),
-      //margin:       createElement('div',   {id: 'margin', part: 'margin'}),
-      //text:         createElement('div',   {id: 'text', part: 'text'}),
-      //overflowArea: createElement('div',   {id: 'overflow-area'}),
-      //placeholder:  createElement('div',   {id: 'placeholder', part: 'placeholder'}),
-      //boundary:     createElement('div',   {className: 'boundary', part: 'boundary'}),
-      //caret:        createElement('div',   {className: 'caret', part: 'caret'}),
-      //style:        createElement('style', {textContent: cssSource}),
-      //slot:         createElement('slot'),
-    this.#elements.text.append(
-      this.#lines[0].element,
-    //  this.#elements.placeholder,
-    )
+    this.#elements.text.append(this.#lines[0].element,)
     this.#updateLineNumbers()
-    //this.#elements.doc.append(
-    //  this.#elements.margin,
-    //  this.#elements.text,
-    //  this.#elements.overflowArea, 
-    //  this.#elements.boundary,
-    //  this.#elements.caret)
     this.#caretBlink = this.#elements.caret.animate({
       visibility: ['visible', 'hidden', 'hidden'],
     }, {
@@ -533,11 +545,11 @@ class MuchText extends HTMLElement {
     this.#elements.doc.addEventListener('click',           e => this.#handleClick(e))
     this.#elements.doc.addEventListener('pointermove',     e => this.#handlePointerMove(e))
     this.#elements.doc.addEventListener('pointerup',       e => this.#handlePointerUp(e))
-    this.#elements.doc.addEventListener('keydown',         e => this.#handleKeyDown(e))
+    this.addEventListener('keydown',         e => this.#handleKeyDown(e))
     this.#elements.doc.addEventListener('focus',           e => this.#handleFocus(e))
     this.#elements.doc.addEventListener('blur',            e => this.#handleBlur(e))
     this.addEventListener('scroll',                        e => this.#handleScroll(e))
-    this.#elements.slot.addEventListener('slotchange',     e => this.#handleSlotChange(e))
+    //this.#elements.slot.addEventListener('slotchange',     e => this.#handleSlotChange(e))
     this.#elements.doc.addEventListener('contextmenu',     e => this.#openContextMenu(e))
     this.#elements.ctxMenu.addEventListener('click',       e => {})
     this.#elements.ctxMenu.addEventListener('blur',        e => this.#closeContextMenu(e))
@@ -719,14 +731,15 @@ class MuchText extends HTMLElement {
 
   /***************************************************************************
    *                                                                         *
-   *    ATTRIBUTES                                                           *
+   *    ATTRIBUTES & DOM INTERFACE                                           *
    *                                                                         *
    ***************************************************************************/
 
 
   static get observedAttributes() {
     return ['cols', 'wrap', 'line-nums', 'line-contrast', 'placeholder',
-      'disabled', 'readonly', 'show-boundary', 'row-navigation', 'eol-navigation']
+      'disabled', 'readonly', 'show-boundary', 'row-navigation', 'eol-navigation',
+      'undo-depth']
   }
 
   attributeChangedCallback(name, old, val) {
@@ -788,20 +801,48 @@ class MuchText extends HTMLElement {
         this.#setCols(x)
       } 
       break
+    case 'undo-depth':
+      this.#setUndoDepth(Number.parseInt(x))
+      break
     }
   }
 
-  get value() { return this.textContent }
-  set value(x) { this.setText(x) }
-  get form() { return this.#internals.form; }
-  get name() { return this.getAttribute('name'); }
-  get type() { return this.localName; }
-  get validity() {return this.#internals.validity }
-  get validationMessage() {return this.#internals.validationMessage }
-  get willValidate() {return this.#internals.willValidate }
+  get caretPosition()     { return [this.#caretLine, this.#caretColumn] }
+  set caretPosition(x)    { this.#moveTo(...x) }
+  get cols()              { return this.#config.cols == null ? 'auto' : this.#config.cols }
+  set cols(x)             { this.setAttribute('cols', x) }
+  get disabled()          { return this.#config.disabled }
+  set disabled(x)         { this.setAttribute('disabled', x) }
+  get eolNavigation()     { return this.#config.eolNavigation ? 'wrap' : 'off' }
+  set eolNavigation(x)    { this.setAttribute('eol-navigation', x) }
+  get form()              { return this.#internals.form; }
+  get lineContrast()      { return this.#config.altLines }
+  set lineContrast(x)     { this.setAttribute('line-contrast', x) }
+  get lineNums()          { return this.#config.lineNums ? 'on' : 'off' }
+  set lineNums(x)         { this.setAttribute('line-nums', x) }
+  get name()              { return this.getAttribute('name'); }
+  get placeholder()       { return this.#elements.placeholder.textContent }
+  set placeholder(x)      { this.setAttribute('placeholder', x) }
+  get readonly()          { return this.#config.readOnly }
+  set readonly(x)         { this.setAttribute('readonly', x) }
+  get rowNavigation()     { return this.#config.rowNavigation ? 'row' : 'line' }
+  set rowNavigation(x)    { this.setAttribute('row-navigation', x) }
+  get showBoundary()      { return this.#config.showBoundary }
+  set showBoundary(x)     { this.setAttribute('show-boundary', x) }
+  get type()              { return this.localName; }
+  get undoDepth()         { return this.#config.undoDepth }
+  set undoDepth(x)        { this.setAttribute('undo-depth', x) }
+  get validity()          { return this.#internals.validity }
+  get validationMessage() { return this.#internals.validationMessage }
+  get value()             { return this.textContent }
+  set value(x)            { this.setText(x) }
+  get willValidate()      { return this.#internals.willValidate }
+  get wrap()              { return this.#config.hardWrap ? 'hard' : this.#config.lineWrap ? 'soft' : 'off' }
+  set wrap(x)             { this.setAttribute('wrap', x) }
 
-  checkValidity() { return this.#internals.checkValidity() }
-  reportValidity() {return this.#internals.reportValidity() }
+  checkValidity()  { return this.#internals.checkValidity() }
+  reportValidity() { return this.#internals.reportValidity() }
+
 
 
   /***************************************************************************
@@ -901,112 +942,6 @@ class MuchText extends HTMLElement {
    */
   static rangeSpan(range) {
     return [range.endLine - range.startLine, range.endColumn - range.startColumn]
-  }
-
-
-
-  /***************************************************************************
-   *                                                                         *
-   *    DOM INTERFACE GETTERS / SETTERS                                      *
-   *                                                                         *
-   ***************************************************************************/
-
-
-  get rowNavigation() { return this.#config.rowNavigation ? 'row' : 'line' }
-  set rowNavigation(x) { this.setAttribute('row-navigation', x) }
-  get eolNavigation() { return this.#config.eolNavigation ? 'wrap' : 'off' }
-  set eolNavigation(x) { this.setAttribute('eol-navigation', x) }
-
-  get placeholder() { return this.#elements.placeholder.textContent }
-  set placeholder(x) { this.setAttribute('placeholder', x) }
-
-  get caretPosition() {
-    return [this.#caretLine, this.#caretColumn]
-  }
-
-  get cols() {
-    return this.#config.cols == null ? 'auto' : this.#config.cols
-  }
-
-  set cols(x) {
-    if(x == 'auto') {
-      this.#setCols(null)
-    } else {
-      x = Number.parseInt(x)
-      this.#setCols(x)
-    }
-    if(this.hasAttribute('cols'))
-      this.setAttribute('cols', x.toString())
-  }
-
-  get wrap() {
-    return this.#config.hardWrap ? 'hard' 
-         : this.#config.lineWrap ? 'soft' : 'off'
-  }
-
-  set wrap(x) { this.setAttribute('wrap', x) }
-
-  get lineNums() {
-    return this.#config.lineNums ? 'on' : 'off'
-  }
-
-  set lineNums(x) {
-    if(x=='on')
-      this.#enableLineNumbers()
-    else if(x=='off')
-      this.#disableLineNumbers()
-    if(this.hasAttribute('line-nums'))
-      this.setAttribute('line-nums', x)
-  }
-
-  get lineContrast() {
-    return this.#config.altLines
-  }
-
-  set lineContrast(x) {
-    if(x=='lines')
-      this.#enableLineContrast(true)
-    else if(x=='rows')
-      this.#enableLineContrast(false)
-    else if(x=='off')
-      this.#disableLineContrast()
-    if(this.hasAttribute('line-contrast'))
-      this.setAttribute('line-contrast', x)
-  }
-
-  get disabled() {
-    return this.#config.disabled
-  }
-
-  set disabled(x) {
-    x = x == true
-    this.#setDisabled(x)
-    if(this.hasAttribute('disabled'))
-      this.setAttribute('disabled', x)
-  }
-
-  get readonly() {
-    return this.#config.readOnly
-  }
-
-  set readonly(x) {
-    x = x == true
-    this.#setReadOnly(x)
-    if(this.hasAttribute('readonly'))
-      this.setAttribute('readonly', x)
-  }
-
-  get showBoundary() {
-    return this.#config.showBoundary ? 'column' : 'off'
-  }
-
-  set showBoundary(x) {
-    if(x=='column')
-      this.#toggleBoundary(true)
-    else if(x=='off')
-      this.#toggleBoundary(false)
-    if(this.hasAttribute('show-boundary'))
-      this.setAttribute('show-boundary', x)
   }
 
 
@@ -1157,7 +1092,36 @@ class MuchText extends HTMLElement {
 
   /** Insert a string at the given position. 
    *
-   * Returns a [column, line] pair at the end of the inserted range.
+   * Arguments:
+   *   row, col     The position at which insertion begins.
+   *   text         String containing the text to be inserted.
+   *   updateSlot   Should the insertion be applied to the light-DOM text node?
+   *   inputType    Value to use for DOM input event's inputType property
+   *   advanceCaret Should the caret advance to the end of the inserted range?
+   *
+   * Return value: a [column, line] pair at the end of the inserted range.
+   *
+   * If the inserted text contains lines that are longer than the maximum width
+   * and hard wrapping is enabled, line breaks are inserted in and after the
+   * input as necessary. Creates a new history entry containing the primary
+   * insertion and any additional line break insertions applied as a result of
+   * hard wrapping. The start and end markers of annotations that begin after
+   * the insertion point are pushed forward by the length of the input text to
+   * maintain their positions in the document, those that start before the
+   * insertion point are stretched. Annotations starting after the insertion
+   * point but on the same line may also be stretched if hard wrapping is on and
+   * a line break must be inserted after their start point. The set of stretched
+   * annotations is used to determine the `affectedRange` for the input event.
+   * The least superset of the `affectedRange` containing no partial annotations
+   * is given as the `extendedRange`. 
+   *
+   * Events: Emits an 'input' event of the type given as `inputType`. May emit
+   * more than one event if hard wrapping is enabled and the action requires
+   * insertion of additional line breaks further down the line.
+   *
+   * Perf: Affects the DOM. Does not affect styles. Does not force layout. Is
+   * linear with respect to the input length, quadratic with respect to the
+   * number of affected annotations.
    */
   insertAt(row, col, text, updateSlot=true, inputType='insertText', advanceCaret=true) {
     if(this.#lines.length == 0 || (this.#lines.length == 1 && this.#lines[0].chars.length == 0) && 
@@ -1575,6 +1539,16 @@ class MuchText extends HTMLElement {
     //}
   }
 
+  /** Change the maximum number of undo entries. */
+  #setUndoDepth(x) {
+    const len = this.#history.buffer.length
+    if(x < len) {
+      this.#history.buffer.splice(0, len - x)
+      this.#history.index -= len - x
+    }
+    this.#config.undoDepth = x
+    
+  }
 
 
   /***************************************************************************
@@ -2173,11 +2147,16 @@ class MuchText extends HTMLElement {
     const margin = this.#marginWidth
     const tBox = this.#textBox
     const top = ln.element.offsetTop // this.#lineOffset(cL)
-    if(cC >= tBox.cols && this.#config.lineWrap && cC <= ln.chars.length) {
+    if(cC >= tBox.cols && this.#config.lineWrap) {
       const n = floor(cC / tBox.cols)
       const rem = cC % tBox.cols
-      this.#elements.caret.style.left = `calc(${margin}px + ${rem}ch)`
-      this.#elements.caret.style.top = `${top + n*h}px` //`calc(${cL} * (1em + 1ex))`
+      if(rem == 0 && cC != 0 && cC == ln.chars.length) {
+        this.#elements.caret.style.left = `calc(${margin}px + ${cC}ch)`
+        this.#elements.caret.style.top = `${top}px` //`calc(${cL} * (1em + 1ex))`
+      } else {
+        this.#elements.caret.style.left = `calc(${margin}px + ${rem}ch)`
+        this.#elements.caret.style.top = `${top + n*h}px` //`calc(${cL} * (1em + 1ex))`
+      }
     } else if(ln) {
       this.#elements.caret.style.left = `calc(${margin}px + ${cC}ch)`
       this.#elements.caret.style.top = `${top}px` //`calc(${cL} * (1em + 1ex))`
@@ -2422,9 +2401,10 @@ class MuchText extends HTMLElement {
     const line = this.#lines[this.#caretLine].chars
     if(ev.shiftKey && !this.#selection)
       this.#startSelection()
-    if(!ev.shiftKey && this.#selection)
+    if(!ev.shiftKey && this.#selection) {
+      this.#moveTo(this.#selection.startLine, this.#selection.startColumn)
       this.clearSelection()
-    else
+    } else
       this.#moveLeft()
     if(this.#selection)
       this.#selectToCaret()
@@ -2494,7 +2474,11 @@ class MuchText extends HTMLElement {
       this.#startSelection()
     else if(!ev.shiftKey && this.#selection)
       this.clearSelection()
-    this.#moveTo(this.#caretLine, 0)
+    if(this.#config.rowNavigation && this.#config.lineWrap) {
+      const cols = this.#textBox.cols
+      this.#moveTo(this.#caretLine, floor(this.#caretColumn / cols) * cols)
+    } else
+      this.#moveTo(this.#caretLine, 0)
     if(this.#selection)
       this.#selectToCaret()
   }
@@ -2505,7 +2489,11 @@ class MuchText extends HTMLElement {
     else if(!ev.shiftKey && this.#selection)
       this.clearSelection()
     const line = this.#lines[this.#caretLine]
-    this.#moveTo(this.#caretLine, line.chars.length)
+    if(this.#config.rowNavigation && this.#config.lineWrap) {
+      const cols = this.#textBox.cols
+      this.#moveTo(this.#caretLine, min(line.chars.length, ceil(this.#caretColumn / cols) * cols))
+    } else
+      this.#moveTo(this.#caretLine, line.chars.length)
     if(this.#selection)
       this.#selectToCaret()
   }
@@ -2632,25 +2620,23 @@ class MuchText extends HTMLElement {
     const cols = this.#textBox.cols
     const line = this.#lines[cL]
 
-    if(cL > 0) {
-      if(this.#config.rowNavigation && this.#config.lineWrap) {
-        if(cC > cols) {
-          if(sC > cC % cols) 
-            this.#caretColumn -= cols - (sC - cC % cols)
-          else
-            this.#caretColumn -= cols
-        } else {
-          this.#caretLine -= 1
-          const newLine = this.#lines[this.#caretLine]
-          const n = floor(newLine.chars.length / cols)
-          const r = newLine.chars.length % cols
-          this.#caretColumn = n*cols + min(sC, r)
-        }
-      } else {
+    if(this.#config.rowNavigation && this.#config.lineWrap) {
+      if(cC > cols) {
+        if(sC > cC % cols) 
+          this.#caretColumn -= cols - (sC - cC % cols)
+        else
+          this.#caretColumn -= cols
+      } else if(cL > 0) {
         this.#caretLine -= 1
         const newLine = this.#lines[this.#caretLine]
-        this.#caretColumn = min(sC, newLine.chars.length)
+        const n = ceil(max(1,newLine.chars.length) / cols) - 1
+        const r = newLine.chars.length % cols
+        this.#caretColumn = min(newLine.chars.length, n*cols + sC)
       }
+    } else if(cL > 0) {
+      this.#caretLine -= 1
+      const newLine = this.#lines[this.#caretLine]
+      this.#caretColumn = min(sC, newLine.chars.length)
     }
 
     this.#changed.caretPosition = true
@@ -2664,22 +2650,21 @@ class MuchText extends HTMLElement {
     const cols = this.#textBox.cols
     const line = this.#lines[cL]
 
-    if(cL+1 < this.#lines.length) {
-      const newLine = this.#lines[cL+1]
-      if(this.#config.rowNavigation && this.#config.lineWrap) {
-        const cols = this.#textBox.cols
-        const n = floor(cC / cols)
-        if(line.chars.length > (n+1)*cols) {
-          this.#caretColumn = min((n+1)*cols + sC, line.chars.length)
-        } else {
-          const r = sC % cols
-          this.#caretLine++
-          this.#caretColumn = min(newLine.chars.length, r)
-        }
-      } else {
+    const newLine = this.#lines[cL+1]
+    if(this.#config.rowNavigation && this.#config.lineWrap) {
+      const cols = this.#textBox.cols
+      const n = floor(cC / cols)
+      if(line.chars.length > (n+1)*cols) {
+        this.#caretColumn = min((n+1)*cols + sC, line.chars.length)
+      } else if(cL + 1 < this.#lines.length) {
+        let r = sC % cols
+        if(r == 0 && sC != 0) r = cols
         this.#caretLine++
-        this.#caretColumn = min(sC, newLine.chars.length)
+        this.#caretColumn = min(newLine.chars.length, r)
       }
+    } else if(cL + 1 < this.#lines.length) {
+      this.#caretLine++
+      this.#caretColumn = min(sC, newLine.chars.length)
     }
 
     this.#changed.caretPosition = true
@@ -2696,10 +2681,13 @@ class MuchText extends HTMLElement {
       const newLine = this.#lines[cL - 1]
       this.#caretLine--
       this.#caretColumn = newLine.chars.length
+      this.#stickyColumn = newLine.chars.length
     } else if(cC > 0) { 
       this.#caretColumn -= 1
+      this.#stickyColumn -= 1
     }
     this.#stickyColumn = this.#caretColumn % cols
+    if(this.#stickyColumn == 0 && this.#caretColumn != 0) this.#stickyColumn = cols
     this.#changed.caretPosition = true
     this.#scheduleRefresh()
   }
@@ -2712,7 +2700,7 @@ class MuchText extends HTMLElement {
     const len    = line.chars.length
     const cols = this.#textBox.cols
 
-    if(this.#config.eolNavigation && cC == len && cL < nLines) {
+    if(this.#config.eolNavigation && cC == len && cL+1 < nLines) {
       this.#caretLine++
       this.#caretColumn = 0
       this.#stickyColumn = 0
@@ -2721,6 +2709,7 @@ class MuchText extends HTMLElement {
       this.#stickyColumn += 1
     }
     this.#stickyColumn = this.#caretColumn % cols
+    if(this.#stickyColumn == 0 && this.#caretColumn != 0) this.#stickyColumn = cols
     this.#changed.caretPosition = true
     this.#scheduleRefresh()
   }

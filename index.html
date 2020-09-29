@@ -74,6 +74,7 @@ much-text {
 }
 much-text::-webkit-scrollbar {
   background: #2A2A2A;
+  height: calc(100% - 20px);
 }
 much-text::-webkit-scrollbar-thumb {
   background: #707070;
@@ -158,20 +159,21 @@ let readmePromise = loadReadme()
 window.onload = async () => {
   let enableAnnotator = true
 
-  eInput = document.querySelector('much-text')
-  const eSplash = document.querySelector('#splash')
-  const eError = document.querySelector('#splash .error')
-  const eExample = document.querySelector('#example')
-  const eWrapMode = document.querySelector('#panel select[name="wrap"]')
-  const eLineNums = document.querySelector('#panel select[name="line-nums"]')
-  const eAltLines = document.querySelector('#panel select[name="line-contrast"]')
-  const eReadOnly = document.querySelector('#panel select[name="read-only"]')
-  const eDisabled = document.querySelector('#panel select[name="disabled"]')
-  const eCols     = document.querySelector('#panel input[name="cols"]')
-  const eAnnotator = document.querySelector('#panel select[name="annotator"]')
-  const eShowBoundary = document.querySelector('#panel select[name="show-boundary"]')
+  eInput               = document.querySelector('much-text')
+  const eSplash        = document.querySelector('#splash')
+  const eError         = document.querySelector('#splash .error')
+  const eExample       = document.querySelector('#example')
+  const eWrapMode      = document.querySelector('#panel select[name="wrap"]')
+  const eLineNums      = document.querySelector('#panel select[name="line-nums"]')
+  const eAltLines      = document.querySelector('#panel select[name="line-contrast"]')
+  const eReadOnly      = document.querySelector('#panel select[name="read-only"]')
+  const eDisabled      = document.querySelector('#panel select[name="disabled"]')
+  const eCols          = document.querySelector('#panel input[name="cols"]')
+  const eAnnotator     = document.querySelector('#panel select[name="annotator"]')
+  const eShowBoundary  = document.querySelector('#panel select[name="show-boundary"]')
   const eRowNavigation = document.querySelector('#panel select[name="row-navigation"]')
   const eEOLNavigation = document.querySelector('#panel select[name="eol-navigation"]')
+  const eUndoDepth     = document.querySelector('#panel input[name="undo-depth"]')
   eWrapMode.addEventListener('change', ev => {
     eInput.wrap = eWrapMode.value
     updateExample()
@@ -208,6 +210,10 @@ window.onload = async () => {
     eInput.eolNavigation = eEOLNavigation.value
     updateExample()
   })
+  eUndoDepth.addEventListener('change', ev => {
+    eInput.undoDepth = Number.parseInt(eUndoDepth.value)
+    updateExample()
+  })
   eAnnotator.addEventListener('change', ev => {
     enableAnnotator = eAnnotator.value == 'markdown'
   })
@@ -236,6 +242,8 @@ window.onload = async () => {
       attrs.push('row-navigation="line"')
     if(eInput.eolNavigation == 'off')
       attrs.push('eol-navigation="off"')
+    if(eInput.undoDepth != 100)
+      attrs.push(`cols="${eInput.undoDepth}"`)
     eExample.innerText = `<much-text ${attrs.join(' ')}></much-text>`
   }
 
@@ -300,6 +308,7 @@ window.onload = async () => {
 <much-text 
   tabindex='0'
   wrap='soft'
+  autofocus='true'
   line-nums='on'
   line-contrast='lines'
   cols='80'
@@ -354,6 +363,8 @@ window.onload = async () => {
       <option>wrap</option>
       <option>off</option>
     </select>
+    <label>undo-depth</label>
+    <input type='text' name='undo-depth' value='100' />
   </div>
   <div class='heading'>Options</div>
   <div class='settings'>

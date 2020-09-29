@@ -91,6 +91,9 @@ The following new attributes are defined:
                  caret onto the previous/next line. Default: wrap.
                  Values: wrap, off
 
+  undo-depth     Maximum number of entries in history buffer.
+                 Values: <integer>
+
 
 #    STYLING
 
