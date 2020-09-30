@@ -27,7 +27,7 @@ const htmlSource = `
 :host {
   display:         flow-root;
   appearance:      textarea;
-  border:          1px solid #707070;
+  outline:          1px solid #707070;
   overflow:        auto auto;
   font-family:     Consolas,Monaco,Lucida Console,Liberation Mono,DejaVu Sans Mono,Bitstream Vera Sans Mono,Courier New, monospace, serif;
   font-size:       13px;
@@ -50,12 +50,12 @@ slot {
   --margin-width:   50px;
   --boundary-left:  0px;
   --line-height:    (15px);
-  padding-top:     2px;
+  /*padding-top:     2px;*/
   user-select:     none;
   position:        relative;
   display:         grid;
   outline:         none;
-  overflow-x:      hidden;
+  /*overflow-x:      hidden;*/
   grid-auto-rows:  minmax(calc(var(--line-height)), min-content);
   grid-auto-flow:  dense;
   overflow-wrap:   anywhere;
@@ -130,7 +130,13 @@ slot {
   line-height:     calc(var(--line-height));
   vertical-align:  middle;
 }
-#margin, #overflow-area, #text, .selection {
+#margin {
+  display:         none;
+}
+#doc.show-line-nums #margin {
+  display:         contents;
+}
+#overflow-area, #text, .selection {
   display:         contents;
 }
 .line *, .line-selection, #caret, #placeholder {
@@ -609,6 +615,8 @@ class MuchText extends HTMLElement {
       contentBox:       this.#contentBox,
       textBox:          this.#textBox,
       visibleRegion:    this.#visibleRegion,
+      charWidth:        this.#charWidth,
+      charHeight:       this.#charHeight,
     }
   }
 
@@ -635,7 +643,7 @@ class MuchText extends HTMLElement {
       first += 1
       nextLineHeight = this.#lineHeight(first)
     }
-    vis.firstLineOverflow = y
+    vis.firstLineOverflow = y % cH
     y += this.#contentBox.height
     last = first
     nextLineHeight = this.#lineHeight(last)
@@ -978,7 +986,7 @@ class MuchText extends HTMLElement {
 
   #enableLineNumbers() {
     this.#elements.doc.classList.add('show-line-nums')
-    this.#elements.margin.style.display = 'contents'
+    //this.#elements.margin.style.display = 'contents'
     this.#marginWidth = 50
     this.#config.lineNums = true
     if(this.#selection) this.#highlightSelection()
@@ -988,8 +996,8 @@ class MuchText extends HTMLElement {
 
   #disableLineNumbers() {
     this.#elements.doc.classList.remove('show-line-nums')
-    this.#elements.margin.style.display = 'none'
-    this.#marginWidth = 5
+    //this.#elements.margin.style.display = 'none'
+    this.#marginWidth = 0
     this.#config.lineNums = false
     if(this.#selection) this.#highlightSelection()
     this.#changed.marginWidth = true
@@ -2022,12 +2030,18 @@ class MuchText extends HTMLElement {
     const wrap   = this.#config.lineWrap || this.#config.hardWrap
     const cBox   = this.#contentBox
     const tBox   = this.#textBox
+    const cols   = this.#config.cols
 
     style.setProperty('--margin-width',   `${margin}px`)
     style.setProperty('--boundary-left',  `calc(${margin+tBox.width}px + 0.5ch)`)
     if(wrap) {
-      style.setProperty('--line-width',     `${tBox.cols}.5ch`)
-      style.setProperty('--line-min-width', `${tBox.cols}.5ch`)
+      if(cols == null) {
+        style.setProperty('--line-width',     `${tBox.cols}ch`)
+        style.setProperty('--line-min-width', `${tBox.cols}ch`)
+      } else {
+        style.setProperty('--line-width',     `${cols}ch`)
+        style.setProperty('--line-min-width', `${cols}ch`)
+      }
       style.setProperty('--dead-width',     `${tBox.maxWidth-tBox.width}px`)
     } else {
       style.setProperty('--line-width',      `fit-content`)
@@ -2147,9 +2161,12 @@ class MuchText extends HTMLElement {
     const margin = this.#marginWidth
     const tBox = this.#textBox
     const top = ln.element.offsetTop // this.#lineOffset(cL)
-    if(cC >= tBox.cols && this.#config.lineWrap) {
-      const n = floor(cC / tBox.cols)
-      const rem = cC % tBox.cols
+    const cols = this.#config.cols
+    const wrapPoint = cols == null ? tBox.cols : cols
+
+    if(cC >= wrapPoint && this.#config.lineWrap) {
+      const n = floor(cC / wrapPoint)
+      const rem = cC % wrapPoint
       if(rem == 0 && cC != 0 && cC == ln.chars.length) {
         this.#elements.caret.style.left = `calc(${margin}px + ${cC}ch)`
         this.#elements.caret.style.top = `${top}px` //`calc(${cL} * (1em + 1ex))`
@@ -2161,9 +2178,11 @@ class MuchText extends HTMLElement {
       this.#elements.caret.style.left = `calc(${margin}px + ${cC}ch)`
       this.#elements.caret.style.top = `${top}px` //`calc(${cL} * (1em + 1ex))`
     }
+
     // Make sure the caret is not in the invisble part of its blink cycle
     this.#caretBlink.cancel()
     this.#caretBlink.play()
+
     // Highlight the current line
     if(this.#isFocused)
       if(ln != this.#elements.curLine) {
