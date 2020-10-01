@@ -1,0 +1,30 @@
+{
+  "name": "much-text",
+  "version": "0.1.0",
+  "description": "web component for monospaced text input",
+  "main": "much-text.mjs",
+  "directories": {
+    "test": "test"
+  },
+  "dependencies": {
+    "cypress": "^5.2.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "cypress run --browser chromium --headless"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/shmookey/much-text.git"
+  },
+  "keywords": [
+    "textarea",
+    "input"
+  ],
+  "author": "Luke Williams",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/shmookey/much-text/issues"
+  },
+  "homepage": "https://github.com/shmookey/much-text#readme"
+}
