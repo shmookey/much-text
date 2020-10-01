@@ -546,17 +546,17 @@ class MuchText extends HTMLElement {
       duration: 1000,
       iterations: Infinity,
     })
-    this.#elements.doc.addEventListener('click',           () => {})
-    this.#elements.doc.addEventListener('pointerdown',     e => this.#handlePointerDown(e))
-    this.#elements.doc.addEventListener('click',           e => this.#handleClick(e))
-    this.#elements.doc.addEventListener('pointermove',     e => this.#handlePointerMove(e))
-    this.#elements.doc.addEventListener('pointerup',       e => this.#handlePointerUp(e))
+    //this.#elements.doc.addEventListener('click',           () => {})
+    this.addEventListener('pointerdown',     e => this.#handlePointerDown(e))
+    this.addEventListener('click',           e => this.#handleClick(e))
+    this.addEventListener('pointermove',     e => this.#handlePointerMove(e))
+    this.addEventListener('pointerup',       e => this.#handlePointerUp(e))
     this.addEventListener('keydown',         e => this.#handleKeyDown(e))
-    this.#elements.doc.addEventListener('focus',           e => this.#handleFocus(e))
-    this.#elements.doc.addEventListener('blur',            e => this.#handleBlur(e))
-    this.addEventListener('scroll',                        e => this.#handleScroll(e))
+    this.addEventListener('focus',           e => this.#handleFocus(e))
+    this.addEventListener('blur',            e => this.#handleBlur(e))
+    this.addEventListener('scroll',          e => this.#handleScroll(e))
     //this.#elements.slot.addEventListener('slotchange',     e => this.#handleSlotChange(e))
-    this.#elements.doc.addEventListener('contextmenu',     e => this.#openContextMenu(e))
+    this.addEventListener('contextmenu',     e => this.#openContextMenu(e))
     this.#elements.ctxMenu.addEventListener('click',       e => {})
     this.#elements.ctxMenu.addEventListener('blur',        e => this.#closeContextMenu(e))
     this.#elements.ctxMenu.addEventListener('pointerdown', e => this.#contextMenuPointerEvent(e))
@@ -638,7 +638,7 @@ class MuchText extends HTMLElement {
     let first = 0
     let last = 0
     let nextLineHeight = this.#lineHeight(first)
-    while(nextLineHeight != null && y > nextLineHeight) {
+    while(nextLineHeight != null && y >= nextLineHeight) {
       y -= nextLineHeight
       first += 1
       nextLineHeight = this.#lineHeight(first)
@@ -700,8 +700,9 @@ class MuchText extends HTMLElement {
     }
     row = min(row, this.#lines.length-1)
     let col = region.firstCol + floor(x / cW)
+    const cols = this.#config.cols == null ? tBox.cols : this.#config.cols
     if(y > cH) 
-      col += floor(y / cH) * tBox.cols
+      col += floor(y / cH) * cols
     col = min(col, this.#lines[row].chars.length)
     return [row, col]
   }
