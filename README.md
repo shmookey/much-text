@@ -167,5 +167,6 @@ stamped out - it is, in other words, a bug.
 
 # LICENSE
 
-much-text is free software under the MIT license.
+much-text is free software under the MIT license. See the LICENSE file for
+details.
 
