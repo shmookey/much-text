@@ -1804,7 +1804,9 @@ class MuchText extends HTMLElement {
     const eSelection = this.#selection.element
     if(to == null) to = line.chars.length
     //const lineTop = eLine.offsetTop
-    const width = this.#textBox.cols
+    const wrap = this.#config.lineWrap
+    const cols = this.#config.cols
+    const width = cols == null ? this.#textBox.cols : cols
     const margin = this.#marginWidth
 
     if(to <= width || !this.#config.lineWrap) {
