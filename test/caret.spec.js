@@ -46,11 +46,16 @@ describe('caret spec', () => {
     return $e => {
       const cW = $e[0].debug.charWidth
       const cH = $e[0].debug.charHeight
-      console.log(cW, cH)
       cy.wrap($e).click(col * cW, row * cH)
     }
   }
 
+  it('click in row when softwrapping beyond visible region', () => {
+    cy.visit('/test.html')
+    init('AAAAABBBB\nCCCCCDDDDD\nEEEEEFFFFF', {cols: 10, wrap: 'soft'})
+      .then(clickPoint(2.5, 2.5))
+      .should(beAt(2,2))
+  })
 
   it('start at 0,0', () => {
     cy.visit('/test.html')
@@ -402,7 +407,7 @@ describe('caret spec', () => {
   })
   it('soft-wrap length exceeds available space while vertical scrollbar visible', () => {
     cy.visit('/test.html')
-    init('A\nB\nAAAAABBBBB\nC\nD\nE\nF', {cols: 10, wrap: 'soft'})
+    init('A\nB\nAAAAABBBBBCCCCC\nC\nD\nE\nF', {cols: 10, wrap: 'soft'})
       .then(moveTo(2,9))
       .shadow()
       .should(bePositionedAt(2,9))

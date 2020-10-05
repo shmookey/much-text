@@ -663,10 +663,12 @@ class MuchText extends HTMLElement {
   }
 
   #lineHeight(row) {
-    const cH   = this.#charHeight
-    const cols = this.#textBox.cols
-    const wrap = this.#config.lineWrap
-    const line = this.#lines[row]
+    const cH      = this.#charHeight
+    const wrap    = this.#config.lineWrap
+    const cfgCols = this.#config.cols
+    const cols    = wrap && cfgCols != null ? cfgCols 
+                                            : this.#textBox.cols
+    const line    = this.#lines[row]
     if(!line) return null
     if(!wrap) return cH
     return cH * max(1, ceil(line.chars.length / cols))
