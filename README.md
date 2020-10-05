@@ -165,3 +165,7 @@ stamped out - it is, in other words, a bug.
   at the edge of the element, for whatever width it happens to be.
 
 
+# LICENSE
+
+much-text is free software under the MIT license.
+
