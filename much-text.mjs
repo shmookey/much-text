@@ -929,8 +929,8 @@ class MuchText extends HTMLElement {
 
   /** Test if `a` is contained entirely within `b`. */
   static isSubRange(a, b) {
-    return comparePoints(a.startLine, a.startColumn, b.startLine, b.startColumn) >= 0 &&
-           comparePoints(a.endLine, a.endColumn, b.endLine, b.endColumn) <= 0
+    return MuchText.comparePoints(a.startLine, a.startColumn, b.startLine, b.startColumn) >= 0 &&
+           MuchText.comparePoints(a.endLine, a.endColumn, b.endLine, b.endColumn) <= 0
   }
 
   /** Test if a position is before, within or after the specified range. */
@@ -951,6 +951,44 @@ class MuchText extends HTMLElement {
    */
   static rangeSpan(range) {
     return [range.endLine - range.startLine, range.endColumn - range.startColumn]
+  }
+
+  static ensureForwards(range) {
+    if(MuchText.comparePoints(range.startLine, range.startColumn, range.endLine, range.endColumn) < 0)
+      return range
+    else
+      return {
+        startLine: range.endLine,
+        startColumn: range.endColumn,
+        endLine: range.startLine,
+        endColumn: range.startColumn,
+      }
+  }
+
+  /** Returns a new range guaranteed to be in range and not backwards. */
+  #normalizeRange(range) {
+    range = {startLine: range.startLine, startColumn: range.startColumn, 
+             endLine:   range.endLine,   endColumn:   range.endColumn}
+    range = MuchText.ensureForwards(range)
+    if(range.startLine < 0) {
+      range.startLine = 0
+      range.startColumn = 0
+    }
+    const lastLine = this.#lines.length - 1
+    const lastCol = this.#lines[lastLine].chars.length
+    if(MuchText.comparePoints(range.startLine, range.startColumn, lastLine, lastCol) > 0) {
+      range.startLine = lastLine
+      range.startColumn = lastCol
+    } else {
+      range.startColumn = min(range.startColumn, this.#lines[range.startLine].chars.length)
+    }
+    if(MuchText.comparePoints(range.endLine, range.endColumn, lastLine, lastCol) > 0) {
+      range.endLine = lastLine
+      range.endColumn = lastCol
+    } else {
+      range.endColumn = min(range.endColumn, this.#lines[range.endLine].chars.length)
+    }
+    return range
   }
 
 
@@ -1293,6 +1331,7 @@ class MuchText extends HTMLElement {
    * The caret is optionally moved to the start of the deleted range.
    */
   deleteRange(range, moveCaret=true, inputType='deleteContent', isReplacing=false) {
+    range = this.#normalizeRange(range)
     const {startLine,startColumn,endLine,endColumn} = range
     if(startLine==endLine && startColumn==endColumn) return
     const text = this.getRange(range)
