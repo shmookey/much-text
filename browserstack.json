@@ -1,0 +1,35 @@
+{
+    "auth": {
+        "username": "lukewilliams9"
+    },
+    "browsers": [
+        {
+            "browser": "chrome",
+            "os": "Windows 10",
+            "versions": [
+                "85"
+            ]
+        },
+        {
+            "browser": "chrome",
+            "os": "OS X Mojave",
+            "versions": [
+                "85"
+            ]
+        }
+    ],
+    "run_settings": {
+        "cypress_proj_dir": "/home/shmookey/src/much-text",
+        "project_name": "much-text",
+        "build_name": "0.1.0",
+        "exclude": [],
+        "parallels": 1,
+        "npm_dependencies": {},
+        "package_config_options": {}
+    },
+    "connection_settings": {
+        "local": true,
+        "local_identifier": null
+    },
+    "disable_usage_reporting": false
+}
