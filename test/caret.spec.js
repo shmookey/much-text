@@ -16,7 +16,7 @@ describe('caret spec', () => {
       for(let [k,v] of Object.entries(opts))
         $e[0].setAttribute(k,v)
       return reset(text)($e)
-    })
+    }).wait(50)
   }
   function moveTo(row, col) {
     return $e => { $e[0].caretPosition = [row, col] }
@@ -40,7 +40,24 @@ describe('caret spec', () => {
       expect(rectVals(cBox)).to.deep.eq(rectVals(eBox))
     }
   }
-
+  /** Scroll to a (possibly non-integer) row,col position. */
+  function scrollToPosition(row, col) {
+    return $e => { 
+      const cW = $e[0].debug.charWidth
+      const cH = $e[0].debug.charHeight
+      const scrollOptions = {
+        left:      round(col * cW),
+        top:       round(row * cH),
+        behaviour: 'auto', 
+      }
+      console.log(scrollOptions)
+      console.log(`e.scrollLeft = ${$e[0].scrollLeft}`)
+      $e[0].scrollTop  = scrollOptions.top
+      $e[0].scrollLeft = scrollOptions.left
+      console.log(`e.scrollLeft = ${$e[0].scrollLeft}`)
+      //cy.wrap($e).scrollTo(scrollOptions)
+    }
+  }
   /** Click the element at a (possibly non-integer) row,col position. */
   function clickPoint(row, col) {
     return $e => {
@@ -50,13 +67,29 @@ describe('caret spec', () => {
     }
   }
 
+  it('horizontally scrolled by a whole column amount', () => {
+    cy.visit('/test.html')
+    init('AAAAABBBBBCCCCC', {wrap: 'off'})
+      .then(moveTo(0,8))
+      .then(scrollToPosition(0,4))
+      .shadow()
+      .should(bePositionedAt(0,4))
+  })
+  it('horizontally scrolled by a whole column increment with vertical scrollbar visible', () => {
+    cy.visit('/test.html')
+    init('A\nAAAAABBBBBCCCCC\nB\nC\nD\nE', {wrap: 'off'})
+      .then(moveTo(1,8))
+      .then(scrollToPosition(0, 4))
+      .shadow()
+      .should(bePositionedAt(1,4))
+  })
+ /* 
   it('click in row when softwrapping beyond visible region', () => {
     cy.visit('/test.html')
     init('AAAAABBBB\nCCCCCDDDDD\nEEEEEFFFFF', {cols: 10, wrap: 'soft'})
       .then(clickPoint(2.5, 2.5))
       .should(beAt(2,2))
   })
-
   it('start at 0,0', () => {
     cy.visit('/test.html')
     init().should(beAt(0,0))
@@ -363,7 +396,7 @@ describe('caret spec', () => {
     cy.visit('/test.html')
     init('A\nB\nC\nD\nE\nF')
       .then(moveTo(3,0))
-      .scrollTo(0, 15)
+      .then(scrollToPosition(1, 0))
       .shadow()
       .should(bePositionedAt(2,0))
   })
@@ -371,7 +404,7 @@ describe('caret spec', () => {
     cy.visit('/test.html')
     init('A\nB\nC\nD\nE\nF\nG')
       .then(moveTo(3,0))
-      .scrollTo(0, 20)
+      .then(scrollToPosition(1.3, 0))
       .shadow()
       .should(bePositionedAt(2,0))
   })
@@ -379,7 +412,7 @@ describe('caret spec', () => {
     cy.visit('/test.html')
     init('A\nB\nC\nDDDDDDD\nE\nF\nG', {cols: 5, wrap: 'soft'})
       .then(moveTo(3,6))
-      .scrollTo(0, 15)
+      .then(scrollToPosition(1, 0))
       .shadow()
       .should(bePositionedAt(3,1))
   })
@@ -387,7 +420,7 @@ describe('caret spec', () => {
     cy.visit('/test.html')
     init('A\nB\nC\nDDDDDDD\nE\nF\nG', {cols: 5, wrap: 'soft'})
       .then(moveTo(3,6))
-      .scrollTo(0, 22)
+      .then(scrollToPosition(1.4, 0))
       .shadow()
       .should(bePositionedAt(3,1))
   })
@@ -416,7 +449,7 @@ describe('caret spec', () => {
     cy.visit('/test.html')
     init('AAAAABBBBBCCCCC', {wrap: 'off'})
       .then(moveTo(0,8))
-      .scrollTo(7.79 * 4, 0)
+      .then(scrollToPosition(0, 4))
       .shadow()
       .should(bePositionedAt(0,4))
   })
@@ -424,8 +457,7 @@ describe('caret spec', () => {
     cy.visit('/test.html')
     init('A\nAAAAABBBBBCCCCC\nB\nC\nD\nE', {wrap: 'off'})
       .then(moveTo(1,8))
-      .wait(25)
-      .scrollTo(7.79 * 4, 0)
+      .then(scrollToPosition(0, 4))
       .shadow()
       .should(bePositionedAt(1,4))
   })
@@ -433,8 +465,7 @@ describe('caret spec', () => {
     cy.visit('/test.html')
     init('A\nB\nC\nAAAAABBBBBCCCCC\nB\nC\nD\nE', {wrap: 'off'})
       .then(moveTo(3,8))
-      .wait(25)
-      .scrollTo(7.79 * 4.3, 20)
+      .then(scrollToPosition(1.3, 4.3))
       .shadow()
       .should(bePositionedAt(2,4))
   })
@@ -442,8 +473,7 @@ describe('caret spec', () => {
     cy.visit('/test.html')
     init('A\nB\nC\nAAAAABBBBBCCCCC\nB\nC\nD\nE', {cols: 10, wrap: 'soft'})
       .then(moveTo(3,14))
-      .wait(25)
-      .scrollTo(7.79 * 2.7, 28)
+      .then(scrollToPosition(1.9, 2.7))
       .shadow()
       .should(bePositionedAt(3,2))
   })
@@ -462,8 +492,7 @@ describe('caret spec', () => {
   it('click in line while horizontally scrolled with no wrapping', () => {
     cy.visit('/test.html')
     init('AAAAA\nBBBBBBBBBB\nCCCCC', {wrap: 'off'})
-      .scrollTo(7.79*2, 0)
-      .wait(25)
+      .then(scrollToPosition(0, 2))
       .then(clickPoint(1.1, 2.1))
       .should(beAt(1,4))
   })
@@ -476,32 +505,28 @@ describe('caret spec', () => {
   it('click in softwrapped row while horizontally scrolled', () => {
     cy.visit('/test.html')
     init('AAAAA\nBBBBBBBBBBBBBBB\nCCCCC', {cols: 10, wrap: 'soft'})
-      .scrollTo(7.79*2, 0)
-      .wait(25)
+      .then(scrollToPosition(0, 2))
       .then(clickPoint(2.1, 2.1))
       .should(beAt(1,14))
   })
   it('click in line while vertically scrolled with no wrapping', () => {
     cy.visit('/test.html')
     init('AAAAA\n\nBBBBB\n\nCCCCC\n\nDDDDD\n\nEEEEE\n\nFFFFF', {wrap: 'off'})
-      .scrollTo(0, 30)
-      .wait(25)
+      .then(scrollToPosition(2, 0))
       .then(clickPoint(2.1, 2.1))
       .should(beAt(4,2))
   })
   it('click on softwrapped row while vertically scrolled', () => {
     cy.visit('/test.html')
     init('AAAAA\n\nBBBBB\n\nCCCCCQQQQQ\n\nDDDDD\n\nEEEEE\n\nFFFFF', {cols: 5, wrap: 'soft'})
-      .scrollTo(0, 30)
-      .wait(25)
+      .then(scrollToPosition(2, 0))
       .then(clickPoint(3.1, 2.1))
       .should(beAt(4,7))
   })
   it('click on softwrapped row while fractionally vertically scrolled', () => {
     cy.visit('/test.html')
     init('AAAAA\n\nBBBBB\n\nCCCCCQQQQQ\n\nDDDDD\n\nEEEEE\n\nFFFFF', {cols: 5, wrap: 'soft'})
-      .scrollTo(0, 35)
-      .wait(25)
+      .then(scrollToPosition(2.3, 0))
       .then(clickPoint(3.1, 2.1))
       .should(beAt(4,7))
   })
@@ -535,5 +560,5 @@ describe('caret spec', () => {
       .then(clickPoint(2.1, 2.1))
       .should(beAt(1,7))
   })
-  
+*/
 })
