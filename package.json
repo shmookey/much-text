@@ -6,8 +6,7 @@
   "directories": {
     "test": "test"
   },
-  "dependencies": {
-  },
+  "dependencies": {},
   "devDependencies": {
     "cypress": "^5.2.0",
     "browserstack-cypress-cli": "^1.4.0"
