@@ -1,7 +1,8 @@
 {
-  "baseUrl":           "http://localhost:8000",
-  "fixturesFolder":    false,
-  "integrationFolder": "test",
-  "pluginsFile":       false,
-  "supportFile":       false
+  "baseUrl":                      "http://localhost:8000",
+  "fixturesFolder":               false,
+  "integrationFolder":            "test",
+  "pluginsFile":                  false,
+  "supportFile":                  false,
+  "experimentalShadowDomSupport": true
 }
