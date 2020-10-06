@@ -1,8 +1,8 @@
 #!/bin/sh
 
-BS_CYPRESS=$(npm bin)/browserstack-cypress
+BS_CYPRESS="$(npm bin)/browserstack-cypress"
 # Get the build ID from the run command's output
-BUILD_ID=$($BS_CYPRESS run | grep 'build id:' | rev | cut -d" " -f1 | rev)
+BUILD_ID=$($BS_CYPRESS run $@ | grep 'build id:' | rev | cut -d" " -f1 | rev)
 
 # Or, you can read this from the log/build_results.txt file as well
 
