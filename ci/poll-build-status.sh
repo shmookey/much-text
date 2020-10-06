@@ -1,7 +1,8 @@
 #!/bin/sh
 
+BS_CYPRESS=$(npm bin)/browserstack-cypress
 # Get the build ID from the run command's output
-BUILD_ID=$(browserstack-cypress run | grep 'build id:' | rev | cut -d" " -f1 | rev)
+BUILD_ID=$($BS_CYPRESS run | grep 'build id:' | rev | cut -d" " -f1 | rev)
 
 # Or, you can read this from the log/build_results.txt file as well
 
@@ -16,7 +17,7 @@ $(sleep $BUILD_TIME_AVG)
 while [ $BUILD_STATUS == "running" ]
 do
   # Get the build status
-  $(browserstack-cypress build-info $BUILD_ID > temp.txt)
+  $($BS_CYPRESS build-info $BUILD_ID > temp.txt)
   BUILD_STATUS=$(awk '/"status":/ {print $2} ' temp.txt | head -n1 | cut -d"," -f1 | cut -d"\"" -f2)
   $(rm temp.txt)
 
