@@ -19,7 +19,7 @@
         }
     ],
     "run_settings": {
-        "cypress_proj_dir": "/home/shmookey/src/much-text",
+        "cypress_proj_dir": "./",
         "project_name": "much-text",
         "build_name": "0.1.0",
         "exclude": [],
