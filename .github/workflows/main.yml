@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      
+      - name: Use Node.js 14.0
+        uses: actions/setup-node@v1
+        with:
+          node-version: 14.0
+        
+      - name: install dev dependencies
+        run: npm install
+
+      - name: start a simple web server
+        run: python3 -m http.server &
+
+      - name: wget the browserstack local testing binary
+        run: wget https://www.browserstack.com/browserstack-local/BrowserStackLocal-linux-x64.zip
+
+      - name: extract the browserstack local testing binary
+        run: unzip BrowserStackLocal-linux-x64.zip
+        
+      - name: run the browserstack local testing binary in the background
+        env:
+          BROWSERSTACK_KEY: ${{ secrets.BROWSERSTACK_KEY }}
+        run: BrowserStackLocal --key $BROWSERSTACK_KEY --folder $GITHUB_WORKSPACE --daemon start
+        
+      - name: start the browserstack tests
+        env:
+          BROWSERSTACK_KEY: ${{ secrets.BROWSERSTACK_KEY }}
+        run: $(npm bin)/browserstack-cypress run --key $BROWSERSTACK_KEY
+        
+      - name: wait for tests to complete
+        run: $GITHUB_WORKSPACE/ci/poll-build-status.sh
+      
+  
