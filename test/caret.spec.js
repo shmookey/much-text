@@ -16,7 +16,7 @@ describe('caret spec', () => {
       for(let [k,v] of Object.entries(opts))
         $e[0].setAttribute(k,v)
       return reset(text)($e)
-    })
+    }).wait(100)
   }
   function moveTo(row, col) {
     return $e => { $e[0].caretPosition = [row, col] }
