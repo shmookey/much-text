@@ -89,8 +89,7 @@ much-text::part(caret) {
   border-left: 2px solid #EFECEF;
 }
 much-text::part(line-selection) {
-  backdrop-filter: sepia(60%) invert(100%);
-  background: transparent;
+  background: #404040;
 }
 /* markdown-like highlighting */
 much-text::part(italic) {
@@ -310,7 +309,7 @@ window.onload = async () => {
   wrap='soft'
   autofocus='true'
   line-nums='on'
-  line-contrast='lines'
+  line-contrast='off'
   cols='80'
   show-boundary='column'
   placeholder='This is a placeholder...'
