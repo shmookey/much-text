@@ -1,6 +1,12 @@
 describe('caret spec', () => {
 
   const { round } = Math
+  const isMac = navigator.platform.indexOf('Mac') > -1
+  const modKey = isMac ? '{meta}' : '{ctrl}'
+
+  beforeEach(() => {
+    cy.visit('/test.html')
+  })
 
   function reset(text='') {
     return $e => {
@@ -15,14 +21,20 @@ describe('caret spec', () => {
     return cy.get('much-text').click().then($e => {
       for(let [k,v] of Object.entries(opts))
         $e[0].setAttribute(k,v)
-      return reset(text)($e)
-    }).wait(100)
+      reset(text)($e)
+    }).then(waitForFrame)
   }
   function moveTo(row, col) {
     return $e => { $e[0].caretPosition = [row, col] }
   }
   function rectVals(x) {
     return [x.left, x.top, x.width, x.height].map(round)
+  }
+  function waitForFrame($e) {
+    return new Promise((resolve,reject) => {
+      requestAnimationFrame(() => 
+        requestAnimationFrame(() => resolve()))
+    })
   }
   function bePositionedAt(row, col) {
     return $e => {
@@ -40,14 +52,24 @@ describe('caret spec', () => {
       expect(rectVals(cBox)).to.deep.eq(rectVals(eBox))
     }
   }
+  function beScrolledTo(row, col) {
+    return $e => {
+      const cW = $e[0].debug.charWidth
+      const cH = $e[0].debug.charHeight
+      const left = Math.ceil(col * cW)
+      const top  = Math.ceil(row * cH)
+      const vis  = $e[0].debug.visibleRegion
+      expect([vis.scrollX, vis.scrollY]).to.deep.eq([left, top])
+    }
+  }
   /** Scroll to a (possibly non-integer) row,col position. */
   function scrollToPosition(row, col) {
-    return $e => { 
+    return $e => {
       const cW = $e[0].debug.charWidth
       const cH = $e[0].debug.charHeight
       const scrollOptions = {
-        left:      round(col * cW),
-        top:       round(row * cH),
+        left:      Math.ceil(col * cW),
+        top:       Math.ceil(row * cH),
         behaviour: 'auto', 
       }
       $e[0].scrollTop  = scrollOptions.top
@@ -65,30 +87,6 @@ describe('caret spec', () => {
     }
   }
 
-  //it('horizontally scrolled by a whole column amount', () => {
-  //  cy.visit('/test.html')
-  //  init('AAAAABBBBBCCCCC', {wrap: 'off'})
-  //    .should(moveTo(0,8))
-  //    .wait(100)
-  //    .should(scrollToPosition(0,4))
-  //    .shadow()
-  //    .should(bePositionedAt(0,4))
-  //})
-  //it('horizontally scrolled by a whole column increment with vertical scrollbar visible', () => {
-  //  cy.visit('/test.html')
-  //  init('A\nAAAAABBBBBCCCCC\nB\nC\nD\nE', {wrap: 'off'})
-  //    .should(moveTo(1,8))
-  //    .wait(100)
-  //    .should(scrollToPosition(0, 4))
-  //    .shadow()
-  //    .should(bePositionedAt(1,4))
-  //})
-  it('click in row when softwrapping beyond visible region', () => {
-    cy.visit('/test.html')
-    init('AAAAABBBB\nCCCCCDDDDD\nEEEEEFFFFF', {cols: 10, wrap: 'soft'})
-      .then(clickPoint(2.5, 2.5))
-      .should(beAt(2,2))
-  })
   it('start at 0,0', () => {
     cy.visit('/test.html')
     init().should(beAt(0,0))
@@ -348,215 +346,225 @@ describe('caret spec', () => {
       .type('{del}')
       .should(beAt(0,1))
   })
-  it('undo returns to previous position', () => {
+  it('click in row when softwrapping beyond visible region', () => {
     cy.visit('/test.html')
-    init('AA', {cols: 5})
-      .should(moveTo(0,2))
-      .type('A{backspace}A{enter}AA{ctrl}z')
-      .should(beAt(0,2))
+    init('AAAAABBBB\nCCCCCDDDDD\nEEEEEFFFFF', {cols: 10, wrap: 'soft'})
+      .then(clickPoint(2.5, 2.5))
+      .should(beAt(2,2))
   })
-  it('redo returns to original position', () => {
-    cy.visit('/test.html')
-    init('AA', {cols: 5})
-      .should(moveTo(0,2))
-      .type('A{backspace}A{enter}AA{ctrl}z')
-      .type('{ctrl}y')
-      .should(beAt(1,2))
-  })
+
   it('positioned correctly when soft wrapping but not on softwrapped row', () => {
-    cy.visit('/test.html')
     init('AA')
       .should(moveTo(0,2))
       .shadow()
       .should(bePositionedAt(0,2))
   })
   it('positioned correctly when soft wrapped', () => {
-    cy.visit('/test.html')
     init('AAAAAAA', {cols: 5, wrap: 'soft'})
       .should(moveTo(0,7))
       .shadow()
       .should(bePositionedAt(1,2))
   })
   it('positioned on current line when line ends at last col with soft wrap on', () => {
-    cy.visit('/test.html')
     init('AAAAA', {cols: 5, wrap: 'soft'})
       .should(moveTo(0,5))
       .shadow()
       .should(bePositionedAt(0,5))
   })
   it('positioned on next line when at last col in the middle of a soft wrapped line', () => {
-    cy.visit('/test.html')
     init('AAAAAA', {cols: 5, wrap: 'soft'})
       .should(moveTo(0,5))
       .shadow()
       .should(bePositionedAt(1,0))
   })
-  it('scrolled down by a whole line height', () => {
-    cy.visit('/test.html')
-    init('A\nB\nC\nD\nE\nF')
-      .should(moveTo(3,0))
-      .should(scrollToPosition(1, 0))
-      .shadow()
-      .should(bePositionedAt(2,0))
-  })
-  it('scrolled down by a partial line height', () => {
-    cy.visit('/test.html')
-    init('A\nB\nC\nD\nE\nF\nG')
-      .should(moveTo(3,0))
-      .should(scrollToPosition(1.3, 0))
-      .shadow()
-      .should(bePositionedAt(2,0))
-  })
-  it('scrolled down by a whole line height while on a soft-wrapped row', () => {
-    cy.visit('/test.html')
-    init('A\nB\nC\nDDDDDDD\nE\nF\nG', {cols: 5, wrap: 'soft'})
-      .should(moveTo(3,6))
-      .should(scrollToPosition(1, 0))
-      .shadow()
-      .should(bePositionedAt(3,1))
-  })
-  it('scrolled down by a partial line height while on a soft-wrapped row', () => {
-    cy.visit('/test.html')
-    init('A\nB\nC\nDDDDDDD\nE\nF\nG', {cols: 5, wrap: 'soft'})
-      .should(moveTo(3,6))
-      .should(scrollToPosition(1.4, 0))
-      .shadow()
-      .should(bePositionedAt(3,1))
-  })
   it('positioned correctly when wrapping is off', () => {
-    cy.visit('/test.html')
     init('AA', {wrap: 'off'})
       .should(moveTo(0,2))
       .shadow()
       .should(bePositionedAt(0,2))
   })
+
   it('soft-wrap length exceeds available space while vertical scrollbar hidden', () => {
-    cy.visit('/test.html')
     init('AAAAABBBBB', {cols: 10, wrap: 'soft'})
       .should(moveTo(0,9))
       .shadow()
       .should(bePositionedAt(0,9))
   })
   it('soft-wrap length exceeds available space while vertical scrollbar visible', () => {
-    cy.visit('/test.html')
     init('A\nB\nAAAAABBBBBCCCCC\nC\nD\nE\nF', {cols: 10, wrap: 'soft'})
       .should(moveTo(2,9))
       .shadow()
       .should(bePositionedAt(2,9))
   })
-  it('horizontally scrolled by a whole column amount', () => {
-    cy.visit('/test.html')
-    init('AAAAABBBBBCCCCC', {wrap: 'off'})
-      .should(moveTo(0,8))
-      .should(scrollToPosition(0, 4))
-      .shadow()
-      .should(bePositionedAt(0,4))
-  })
-  it('horizontally scrolled by a whole column increment with vertical scrollbar visible', () => {
-    cy.visit('/test.html')
-    init('A\nAAAAABBBBBCCCCC\nB\nC\nD\nE', {wrap: 'off'})
-      .should(moveTo(1,8))
-      .should(scrollToPosition(0, 4))
-      .shadow()
-      .should(bePositionedAt(1,4))
-  })
-  it('scrolled by a partial increment on both axes', () => {
-    cy.visit('/test.html')
-    init('A\nB\nC\nAAAAABBBBBCCCCC\nB\nC\nD\nE', {wrap: 'off'})
-      .should(moveTo(3,8))
-      .should(scrollToPosition(1.3, 4.3))
-      .shadow()
-      .should(bePositionedAt(2,4))
-  })
-  it('scrolled by a partial increment on both axes on a soft-wrapped row', () => {
-    cy.visit('/test.html')
-    init('A\nB\nC\nAAAAABBBBBCCCCC\nB\nC\nD\nE', {cols: 10, wrap: 'soft'})
-      .should(moveTo(3,14))
-      .should(scrollToPosition(1.9, 2.7))
-      .shadow()
-      .should(bePositionedAt(3,2))
-  })
   it('click in line in text with no wrapping', () => {
-    cy.visit('/test.html')
     init('AAAAA\nBBBBB\nCCCCC\nDDDDD\nEEEEE', {wrap: 'off'})
       .then(clickPoint(2.1, 2.1))
       .should(beAt(2,2))
   })
   it('click in line on soft-wrapped row', () => {
-    cy.visit('/test.html')
     init('AAAAA\nBBBBBCCCCC\nDDDDD\nEEEEE', {cols: 5, wrap: 'soft'})
       .then(clickPoint(2.1, 2.1))
       .should(beAt(1,7))
   })
+  it('scrolled down by a whole line height', () => {
+    init('A\nB\nC\nD\nE\nF')
+      .type('G')
+      .should(moveTo(3,0))
+      .should(scrollToPosition(1, 0))
+      .should(beScrolledTo(1, 0))
+      .shadow()
+      .should(bePositionedAt(2,0))
+  })
+  it('scrolled down by a partial line height', () => {
+    init('A\nB\nC\nD\nE\nF\nG')
+      .type('G')
+      .should(moveTo(3,0))
+      .should(scrollToPosition(1.3, 0))
+      .should(beScrolledTo(1.3, 0))
+      .shadow()
+      .should(bePositionedAt(2,0))
+  })
+  it('scrolled down by a whole line height while on a soft-wrapped row', () => {
+    init('A\nB\nC\nDDDDDDD\nE\nF\nG', {cols: 5, wrap: 'soft'})
+      .type('G')
+      .should(moveTo(3,6))
+      .should(scrollToPosition(1, 0))
+      .should(beScrolledTo(1, 0))
+      .shadow()
+      .should(bePositionedAt(3,1))
+  })
+  it('scrolled down by a partial line height while on a soft-wrapped row', () => {
+    init('A\nB\nC\nDDDDDDD\nE\nF\nG', {cols: 5, wrap: 'soft'})
+      .type('G')
+      .should(moveTo(3,6))
+      .should(scrollToPosition(1.4, 0))
+      .should(beScrolledTo(1.4, 0))
+      .shadow()
+      .should(bePositionedAt(3,1))
+  })
+  it('horizontally scrolled by a whole column amount', () => {
+    init('AAAAABBBBBCCCCC', {wrap: 'off'})
+      .type('G')
+      .should(moveTo(0,8))
+      .should(scrollToPosition(0, 4))
+      .should(beScrolledTo(0, 4))
+      .shadow()
+      .should(bePositionedAt(0,4))
+  })
+  it('horizontally scrolled by a whole column increment with vertical scrollbar visible', () => {
+    init('A\nAAAAABBBBBCCCCC\nB\nC\nD\nE', {wrap: 'off'})
+      .type('G')
+      .should(moveTo(1,8))
+      .should(scrollToPosition(0, 4))
+      .should(beScrolledTo(0, 4))
+      .shadow()
+      .should(bePositionedAt(1,4))
+  })
+  it('scrolled by a partial increment on both axes', () => {
+    init('A\nB\nC\nAAAAABBBBBCCCCC\nB\nC\nD\nE', {wrap: 'off'})
+      .type('G')
+      .should(moveTo(3,8))
+      .should(scrollToPosition(1.3, 4.3))
+      .should(beScrolledTo(1.3, 4.3))
+      .shadow()
+      .should(bePositionedAt(2,4))
+  })
+  it('scrolled by a partial increment on both axes on a soft-wrapped row', () => {
+    init('A\nB\nC\nAAAAABBBBBCCCCCDDDDD\nB\nC\nD\nE', {cols: 15, wrap: 'soft'})
+      .type('G')
+      .should(moveTo(3,19))
+      .should(scrollToPosition(1.9, 2.7))
+      .should(beScrolledTo(1.9, 2.7))
+      .shadow()
+      .should(bePositionedAt(3,2))
+  })
   it('click in line while horizontally scrolled with no wrapping', () => {
-    cy.visit('/test.html')
-    init('AAAAA\nBBBBBBBBBB\nCCCCC', {wrap: 'off'})
+    init('AAAAA\nAAAAABBBBBCCCCCDDDDD\nCCCCC', {wrap: 'off'})
+      .type('G')
       .should(scrollToPosition(0, 2))
+      .should(beScrolledTo(0, 2))
       .then(clickPoint(1.1, 2.1))
       .should(beAt(1,4))
   })
   it('click in softwrapped row with horizontal scrollbar visible', () => {
-    cy.visit('/test.html')
     init('AAAAA\nBBBBBBBBBBBBBBB\nCCCCC', {cols: 10, wrap: 'soft'})
       .then(clickPoint(2.1, 3.1))
       .should(beAt(1,13))
   })
   it('click in softwrapped row while horizontally scrolled', () => {
-    cy.visit('/test.html')
     init('AAAAA\nBBBBBBBBBBBBBBB\nCCCCC', {cols: 10, wrap: 'soft'})
+      .type('G')
       .should(scrollToPosition(0, 2))
+      .should(beScrolledTo(0, 2))
       .then(clickPoint(2.1, 2.1))
       .should(beAt(1,14))
   })
   it('click in line while vertically scrolled with no wrapping', () => {
-    cy.visit('/test.html')
     init('AAAAA\n\nBBBBB\n\nCCCCC\n\nDDDDD\n\nEEEEE\n\nFFFFF', {wrap: 'off'})
+      .type('G')
       .should(scrollToPosition(2, 0))
+      .should(beScrolledTo(2, 0))
       .then(clickPoint(2.1, 2.1))
       .should(beAt(4,2))
   })
   it('click on softwrapped row while vertically scrolled', () => {
-    cy.visit('/test.html')
-    init('AAAAA\n\nBBBBB\n\nCCCCCQQQQQ\n\nDDDDD\n\nEEEEE\n\nFFFFF', {cols: 5, wrap: 'soft'})
+    init('AAA\n\nBBBBB\n\nCCCCCQQQQQ\n\nDDDDD\n\nEEEEE\n\nFFFFF', {cols: 5, wrap: 'soft'})
+      .type('G')
       .should(scrollToPosition(2, 0))
+      .should(beScrolledTo(2, 0))
       .then(clickPoint(3.1, 2.1))
       .should(beAt(4,7))
   })
+
   it('click on softwrapped row while fractionally vertically scrolled', () => {
-    cy.visit('/test.html')
-    init('AAAAA\n\nBBBBB\n\nCCCCCQQQQQ\n\nDDDDD\n\nEEEEE\n\nFFFFF', {cols: 5, wrap: 'soft'})
+    init('AAA\n\nBBBBB\n\nCCCCCQQQQQ\n\nDDDDD\n\nEEEEE\n\nFFFFF', {cols: 5, wrap: 'soft'})
+      .type('G')
       .should(scrollToPosition(2.3, 0))
+      .should(beScrolledTo(2.3, 0))
       .then(clickPoint(3.1, 2.1))
       .should(beAt(4,7))
   })
   it('click beyond end of line', () => {
-    cy.visit('/test.html')
     init('AAAAA\nBB\nCCCCC', {cols: 5, wrap: 'off'})
       .then(clickPoint(1.5, 5))
       .should(beAt(1,2))
   })
   it('click beyond end of softwrapped line', () => {
-    cy.visit('/test.html')
     init('AAAAA\nBBBBBCC\nDDDDD', {cols: 5, wrap: 'soft'})
       .then(clickPoint(2.5, 5))
       .should(beAt(1,7))
   })
   it('click beyond end of data', () => {
-    cy.visit('/test.html')
     init('AAAAA\nBBB', {cols: 5, wrap: 'off'})
       .then(clickPoint(3.5, 3.5))
       .should(beAt(1,3))
   })
   it('click beyond end of data onto softwrapped row', () => {
-    cy.visit('/test.html')
     init('AAAAA\nBBBBBCCC', {cols: 5, wrap: 'soft'})
       .then(clickPoint(4.1, 4.1))
       .should(beAt(1,8))
   })
   it('click in middle of 3 line softwrapped row', () => {
-    cy.visit('/test.html')
     init('AAAAA\nBBBBBCCCCCDDDDD', {cols: 5, wrap: 'soft'})
       .then(clickPoint(2.1, 2.1))
       .should(beAt(1,7))
   })
+
+  it('undo returns to previous position', () => {
+    init('AA', {cols: 5})
+      .should(moveTo(0,2))
+      .type('A{backspace}A{enter}AA')
+      .type(`${modKey}z`)
+      .should(beAt(0,2))
+  })
+  it('redo returns to original position', () => {
+    init('AA', {cols: 5})
+      .should(moveTo(0,2))
+      .type('A{backspace}A{enter}AA')
+      .type(`${modKey}z`)
+      .type(`${modKey}y`)
+      .should(beAt(1,2))
+  })
+
+  
 })
