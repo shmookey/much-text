@@ -98,7 +98,7 @@ slot {
   height:          calc(var(--line-height));
   position:        absolute;
   min-width:       1ch;
-  background:      #A0A0FF;
+  background:      #ACCEF7;
   z-index:         -1;
 }
 .line-selection-effect {
@@ -110,9 +110,11 @@ slot {
 
 .line-effect {
   grid-column:     1/4;
-  height:          calc(var(--line-height));
-  width:           100%;
-  position:        relative;
+  grid-row-end:    span 1;
+  left:            0;
+  right:           0;
+  top:             0;
+  bottom:          0;
 }
 .line, #placeholder {
   grid-column:     2;
@@ -716,14 +718,24 @@ class MuchText extends HTMLElement {
     return cH * max(1, ceil(line.chars.length / cols))
   }
 
-  /** Get the vertical position of a visible line, relative to the textBox. */
+  /** Get the vertical position of a visible line, relative to the textBox's bounding box. */
   #lineOffset(row) {
     const vis = this.#visibleRegion
-    let i   = row >= vis.firstLine ? vis.firstLine          : 0
-    let top = row >= vis.firstLine ? -vis.firstLineOverflow : 0
+    if(row < vis.firstLine || row > vis.lastLine) return null
+    let i   = vis.firstLine
+    let top = -vis.firstLineOverflow
     while(i<row) {
       top += this.#lineHeight(i)
       i++
+    }
+    return top
+  }
+
+  /** Get the vertical position of a visible line, relative to the start of the document. */
+  #lineDocOffset(row) {
+    let top = 0
+    for(let i=0; i<row; i++) {
+      top += this.#lineHeight(i)
     }
     return top
   }
@@ -1856,12 +1868,14 @@ class MuchText extends HTMLElement {
 
     if(to <= width || !this.#config.lineWrap) {
       const e = createElement('div', {className: 'line-selection'})
-      e.style.top   = `calc(${offset.top}px + ${offset.row} * calc(var(--line-height)))`
+      e.style.gridRow = lineNumber+1
+      //e.style.top   = `calc(${offset.top}px + ${offset.row} * calc(var(--line-height)))`
       e.style.left  = `calc(${margin}px + ${from}ch)`
       e.style.width = `calc(${to-from}ch)`
       eSelection.appendChild(e)
       const fx = createElement('div', {className: 'line-selection-effect'})
-      fx.style.top   = `calc(${offset.top}px + ${offset.row} * calc(var(--line-height)))`
+      //fx.style.top   = `calc(${offset.top}px + ${offset.row} * calc(var(--line-height)))`
+      fx.style.gridRow = lineNumber+1
       fx.style.left  = `calc(${margin}px + ${from}ch)`
       fx.style.width = `calc(${to-from}ch)`
       fxSelection.appendChild(fx)
@@ -1870,20 +1884,24 @@ class MuchText extends HTMLElement {
       const fromRow = floor(from / width)
       const toRow = floor(to / width)
       let left = from % width
+      let j = 1
       for(let i=fromRow; i<=toRow; i++) {
         const right = i<toRow ? width : (to % width)
         const e = createElement('div', {className: 'line-selection'})
-        e.style.top   = `calc(${offset.top}px + ${offset.row} * calc(var(--line-height)))`
+        e.style.gridRow = lineNumber+1  
+        e.style.top   = `calc(${i} * calc(var(--line-height)))`
         e.style.left  = `calc(${margin}px + ${left}ch)`
         e.style.width = `calc(${right - left}ch)`
         eSelection.appendChild(e)
         const fx = createElement('div', {className: 'line-selection-effect'})
-        fx.style.top   = `calc(${offset.top}px + ${offset.row} * calc(var(--line-height)))`
+        fx.style.gridRow = lineNumber+1
+        fx.style.top   = `calc(${i} * calc(var(--line-height)))`
         fx.style.left  = `calc(${margin}px + ${left}ch)`
         fx.style.width = `calc(${right - left}ch)`
         fxSelection.appendChild(fx)
         left = 0
         offset.row++
+        j++
       }
     }
   }
@@ -1905,7 +1923,7 @@ class MuchText extends HTMLElement {
     
     let left = startColumn
     let offset = {
-      top: this.#lineOffset(startLine), // this.#lines[startLine].element.offsetTop,
+      top: this.#lineDocOffset(startLine), // this.#lines[startLine].element.offsetTop,
       row: 0,
     }
     let cols = this.#textBox.cols
@@ -2189,7 +2207,7 @@ class MuchText extends HTMLElement {
     }
     while(nExtra < 0) {
       const e = createElement('div', {className: 'line-effect', part: 'line-effect'})
-      e.style.gridRow = row + 1
+      e.style.gridRowStart = row + 1
       row++
       this.#elements.lineEffectLayer.appendChild(e)
       nHave++
