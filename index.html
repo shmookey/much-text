@@ -94,27 +94,31 @@ much-text::part(line-selection) {
 /* markdown-like highlighting */
 much-text::part(italic) {
   font-style: italic;
+  letter-spacing: -0.2px;
 }
 much-text::part(bold) {
   font-weight: bold;
   color: #AFACAF;
+  letter-spacing: -0.2px;
 }
 much-text::part(html-tag) {
   font-weight: bold;
   color: #CF7C1F;
+  letter-spacing: -0.2px;
 }
 much-text::part(heading-1) {
   font-weight: bold;
   color: #FFEEFF;
+  letter-spacing: -0.2px;
 }
 much-text::part(heading-2) {
   font-weight: bold;
   color: #BFBCBF;
+  letter-spacing: -0.2px;
 }
 much-text::part(code) {
-  background: linear-gradient(to right, #44404400 0.5ch, #000000 1ch, #000000 calc(100% - 1ch), #44404400 calc(100% - 0.5ch));
+/*  background: linear-gradient(to right, #44404400 0.5ch, #000000 1ch, #000000 calc(100% - 1ch), #44404400 calc(100% - 0.5ch));*/
   color:      #FEFE5E;
-  height:     15.333px; /*calc(1em + 1ex);*/
   display:    inline-block;
 }
 
