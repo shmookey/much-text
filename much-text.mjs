@@ -15,6 +15,7 @@ function formatKeyCombo(isMod, isShift, key) {
   buf += key.toUpperCase()
   return buf
 }
+const WORD_BREAK_CHARS = Array.from(` ~!@#$%^&*-=+|;:'",.?()[]{}<>\t\n`)
 
 // TODO: internally style using parts instead of ids
 const htmlSource = `
@@ -98,7 +99,7 @@ slot {
   height:          calc(var(--line-height));
   position:        absolute;
   min-width:       1ch;
-  background:      #ACCEF7;
+  background:      #3297FD;
   z-index:         -1;
 }
 .line-selection-effect {
@@ -331,22 +332,6 @@ function getSlice(doc, startLine, startColumn, endLine, endColumn) {
     const rest = doc.slice(startLine+1, endLine).map(x => x.chars.join('')).join('\n')
     return [first, rest, last].join('\n')
   }
-}
-
-/** Create a line selection element. */
-function mkLineSel(line, from, to, margin) {
-  const e = createElement('div', {className: 'line-selection'})
-  e.style.top   = `calc(${line} * calc(var(--line-height)))`
-  e.style.left  = `calc(${margin}px + ${from}ch)`
-  e.style.width = `calc(${to-from}ch)`
-  return e
-}
-function mkLineSel2(top, from, to, margin) {
-  const e = createElement('div', {className: 'line-selection'})
-  e.style.top   = `${top}px`
-  e.style.left  = `calc(${margin}px + ${from}ch)`
-  e.style.width = `calc(${to-from}ch)`
-  return e
 }
 
 /** Advance a (row, col) position by the length of a range.
@@ -1866,15 +1851,22 @@ class MuchText extends HTMLElement {
     const width = cols == null ? this.#textBox.cols : cols
     const margin = this.#marginWidth
 
+    const mkLineSel = () => createElement('div', {
+      className: 'line-selection', 
+      part:      'line-selection'
+    })
+    const mkLineFX = () => createElement('div', {
+      className: 'line-selection-effect',
+      part:      'line-selection-effect'
+    })
+
     if(to <= width || !this.#config.lineWrap) {
-      const e = createElement('div', {className: 'line-selection'})
+      const e = mkLineSel()
       e.style.gridRow = lineNumber+1
-      //e.style.top   = `calc(${offset.top}px + ${offset.row} * calc(var(--line-height)))`
       e.style.left  = `calc(${margin}px + ${from}ch)`
       e.style.width = `calc(${to-from}ch)`
       eSelection.appendChild(e)
-      const fx = createElement('div', {className: 'line-selection-effect'})
-      //fx.style.top   = `calc(${offset.top}px + ${offset.row} * calc(var(--line-height)))`
+      const fx = mkLineFX() 
       fx.style.gridRow = lineNumber+1
       fx.style.left  = `calc(${margin}px + ${from}ch)`
       fx.style.width = `calc(${to-from}ch)`
@@ -1887,13 +1879,13 @@ class MuchText extends HTMLElement {
       let j = 1
       for(let i=fromRow; i<=toRow; i++) {
         const right = i<toRow ? width : (to % width)
-        const e = createElement('div', {className: 'line-selection'})
+        const e = mkLineSel()
         e.style.gridRow = lineNumber+1  
         e.style.top   = `calc(${i} * calc(var(--line-height)))`
         e.style.left  = `calc(${margin}px + ${left}ch)`
         e.style.width = `calc(${right - left}ch)`
         eSelection.appendChild(e)
-        const fx = createElement('div', {className: 'line-selection-effect'})
+        const fx = mkLineFX()
         fx.style.gridRow = lineNumber+1
         fx.style.top   = `calc(${i} * calc(var(--line-height)))`
         fx.style.left  = `calc(${margin}px + ${left}ch)`
@@ -2000,9 +1992,9 @@ class MuchText extends HTMLElement {
     const line = this.#lines[row]
     let from, to
     for(from = this.#caretColumn; from > 0; from--)
-      if(line.chars[from] == ' ' || line.chars[from] == '\t') break
+      if(WORD_BREAK_CHARS.includes(line.chars[from])) break
     for(to = this.#caretColumn; to < line.chars.length; to++)
-      if(line.chars[to] == ' ' || line.chars[to] == '\t') break
+      if(WORD_BREAK_CHARS.includes(line.chars[to])) break
     this.#selectRange({startLine: row, startColumn: from + 1, endLine: row, endColumn: to})
   }
 
