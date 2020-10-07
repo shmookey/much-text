@@ -2289,29 +2289,29 @@ class MuchText extends HTMLElement {
   }
 
   #updateCaret() {
-    const cL = min(this.#lines.length-1, this.#caretLine)
-    const cC = this.#caretColumn
-    const ln = this.#lines[cL]
-    const h = this.#charHeight
-    const margin = this.#marginWidth
-    const tBox = this.#textBox
-    const top = ln.element.offsetTop // this.#lineOffset(cL)
-    const cols = this.#config.cols
+    const cL        = min(this.#lines.length-1, this.#caretLine)
+    const cC        = this.#caretColumn
+    const ln        = this.#lines[cL]
+    const h         = this.#charHeight
+    const margin    = this.#marginWidth
+    const tBox      = this.#textBox
+    const top       = this.#lineDocOffset(cL) // ln.element.offsetTop // this.#lineOffset(cL)
+    const cols      = this.#config.cols
     const wrapPoint = cols == null ? tBox.cols : cols
 
     if(cC >= wrapPoint && this.#config.lineWrap) {
-      const n = floor(cC / wrapPoint)
+      const n   = floor(cC / wrapPoint)
       const rem = cC % wrapPoint
       if(rem == 0 && cC != 0 && cC == ln.chars.length) {
         this.#elements.caret.style.left = `calc(${margin}px + ${cC}ch)`
-        this.#elements.caret.style.top = `${top}px` //`calc(${cL} * (1em + 1ex))`
+        this.#elements.caret.style.top  = `${top}px` //`calc(${cL} * (1em + 1ex))`
       } else {
         this.#elements.caret.style.left = `calc(${margin}px + ${rem}ch)`
-        this.#elements.caret.style.top = `${top + n*h}px` //`calc(${cL} * (1em + 1ex))`
+        this.#elements.caret.style.top  = `${top + n*h}px` //`calc(${cL} * (1em + 1ex))`
       }
     } else if(ln) {
       this.#elements.caret.style.left = `calc(${margin}px + ${cC}ch)`
-      this.#elements.caret.style.top = `${top}px` //`calc(${cL} * (1em + 1ex))`
+      this.#elements.caret.style.top  = `${top}px` //`calc(${cL} * (1em + 1ex))`
     }
 
     // Make sure the caret is not in the invisble part of its blink cycle
