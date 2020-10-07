@@ -108,6 +108,12 @@ slot {
   backdrop-filter: invert(100%);
 }
 
+.line-effect {
+  grid-column:     1/4;
+  height:          calc(var(--line-height));
+  width:           100%;
+  position:        relative;
+}
 .line, #placeholder {
   grid-column:     2;
   display:         inline-block;
@@ -147,19 +153,19 @@ slot {
 #doc.show-line-nums #margin {
   display:         contents;
 }
-#overflow-area, #text, .selection, .selection-effect-layer {
+#overflow-area, #text, .selection {
   display:         contents;
 }
+
+
 .line *, .line-selection, #caret, #placeholder {
   pointer-events:  none;
 }
 #doc.alternating-rows {
   background:      repeating-linear-gradient(to bottom, #2F2D2F 0px, #2F2D2F 20px, #2A2A2A 20px, #2A2A2A 40px);
 }
-#doc.alternating-lines .line:nth-child(odd), 
-#doc.alternating-lines .line-number:nth-child(odd),
-#doc.alternating-lines .line-overflow:nth-child(odd) {
-  background: #2F2D2F;
+#doc.alternating-lines #line-effect-layer .line-effect:nth-child(odd) { 
+  backdrop-filter: brightness(110%);
 }
 #doc.alternating-lines.no-wrap .line:nth-child(odd), 
 #doc.alternating-lines.no-wrap .line-number:nth-child(odd),
@@ -228,14 +234,36 @@ slot {
 }
 #ruler #position {
 }
+
+
+
+/*
+ *    LAYERS
+ */
+
+#selection-background-layer,
+#selection-foreground-layer,
+#line-effect-layer {
+  display:         contents;
+}
+
+#selection-background-layer > *,
+#selection-foreground-layer > *,
+#line-effect-layer > * {
+  position:        absolute;
+}
+
 </style>
 <div id='doc' part='doc' tabindex='0'>
+  <div id='line-effect-layer'></div>
+  <div id='selection-background-layer'></div>
   <div id='margin' part='margin'></div>
   <div id='text' part='text'>
     <div id='placeholder' part='placeholder'></div>
   </div>
   <div id='overflow-area' part='overflow-area'></div>
   <div id='boundary' part='boundary'></div>
+  <div id='selection-foreground-layer'></div>
   <div id='caret' part='caret'></div>
 </div>
 <slot></slot>
@@ -548,6 +576,9 @@ class MuchText extends HTMLElement {
       ctxRedo:      contextMenu.querySelector('.redo'), 
       ctxSelectAll: contextMenu.querySelector('.select-all'), 
       textNode:     new Text(),
+      lineEffectLayer:          this.shadowRoot.querySelector('#line-effect-layer'), 
+      selectionBackgroundLayer: this.shadowRoot.querySelector('#selection-background-layer'), 
+      selectionForegroundLayer: this.shadowRoot.querySelector('#selection-foreground-layer'), 
     }
     this.#elements.text.append(this.#lines[0].element,)
     this.#updateLineNumbers()
@@ -688,10 +719,11 @@ class MuchText extends HTMLElement {
   /** Get the vertical position of a visible line, relative to the textBox. */
   #lineOffset(row) {
     const vis = this.#visibleRegion
-    if(row < vis.firstLine || row > vis.lastLine) return null
-    let top = -vis.firstLineOverflow
-    for(let i=vis.firstLine; i<row; i++) {
+    let i   = row >= vis.firstLine ? vis.firstLine          : 0
+    let top = row >= vis.firstLine ? -vis.firstLineOverflow : 0
+    while(i<row) {
       top += this.#lineHeight(i)
+      i++
     }
     return top
   }
@@ -1804,20 +1836,19 @@ class MuchText extends HTMLElement {
       startColumn: this.#caretColumn,
       endLine:     this.#caretLine,
       endColumn:   this.#caretColumn,
-      element:     createElement('div', {className: 'selection'}),
-      effectLayer: createElement('div', {className: 'selection-effect-layer'}),
+//      element:     createElement('div', {className: 'selection'}),
+//      effectLayer: createElement('div', {className: 'selection-effect-layer'}),
     }
-    this.#elements.text.before(this.#selection.element)
-    this.#elements.text.after(this.#selection.effectLayer)
+//    this.#elements.text.before(this.#selection.element)
+//    this.#elements.text.after(this.#selection.effectLayer)
     this.#elements.doc.classList.add('select')
   }
 
   #addLineSelection(lineNumber, offset, from, to) {
     const line = this.#lines[lineNumber]
-    const eSelection = this.#selection.element
-    const fxSelection = this.#selection.effectLayer
+    const eSelection  = this.#elements.selectionBackgroundLayer
+    const fxSelection = this.#elements.selectionForegroundLayer
     if(to == null) to = line.chars.length
-    //const lineTop = eLine.offsetTop
     const wrap = this.#config.lineWrap
     const cols = this.#config.cols
     const width = cols == null ? this.#textBox.cols : cols
@@ -1861,8 +1892,8 @@ class MuchText extends HTMLElement {
   #highlightSelection() {
     const selection = this.#selection
     if(!selection) throw 'no selection'
-    Array.from(selection.element.children).map(e => e.remove())
-    Array.from(selection.effectLayer.children).map(e => e.remove())
+    Array.from(this.#elements.selectionBackgroundLayer.childNodes).map(e => e.remove())
+    Array.from(this.#elements.selectionForegroundLayer.childNodes).map(e => e.remove())
     const isBackwards = 
       selection.endLine < selection.startLine || 
       selection.endLine == selection.startLine && selection.endColumn < selection.startColumn
@@ -1874,7 +1905,7 @@ class MuchText extends HTMLElement {
     
     let left = startColumn
     let offset = {
-      top: this.#lines[startLine].element.offsetTop,
+      top: this.#lineOffset(startLine), // this.#lines[startLine].element.offsetTop,
       row: 0,
     }
     let cols = this.#textBox.cols
@@ -1899,8 +1930,8 @@ class MuchText extends HTMLElement {
 
   clearSelection() {
     if(!this.#selection) return
-    this.#selection.element.remove()
-    this.#selection.effectLayer.remove()
+    Array.from(this.#elements.selectionBackgroundLayer.childNodes).map(e => e.remove())
+    Array.from(this.#elements.selectionForegroundLayer.childNodes).map(e => e.remove())
     this.#elements.doc.classList.remove('select')
     this.#selection = null
   }
@@ -1931,10 +1962,7 @@ class MuchText extends HTMLElement {
  
     this.deleteRange({startLine, startColumn, endLine, endColumn}, true, inputType)
  
-    this.#selection.element.remove()
-    this.#selection.effectLayer.remove()
-    this.#selection = null
-    this.#elements.doc.classList.remove('select')
+    this.clearSelection()
   }
 
   /** Select text within a given range, clobbering any previous selection. */
@@ -1968,7 +1996,8 @@ class MuchText extends HTMLElement {
       startColumn: 0,
       endLine:     this.#lines.length-1,
       endColumn:   this.#lines[this.#lines.length-1].chars.length,
-      element:     this.#selection.element,
+      //element:     this.#selection.element,
+      //effectLayer: this.#selection.effectLayer,
     }
     this.#changed.selection = true
     this.#scheduleRefresh()
@@ -2121,6 +2150,7 @@ class MuchText extends HTMLElement {
     }
   }
 
+  /** Updates line numbers, overflow area, and line effect elements. */
   #updateLineNumbers() {
     let nHave = this.#elements.margin.children.length
     const nNeed = this.#lines.length
@@ -2146,6 +2176,22 @@ class MuchText extends HTMLElement {
     while(nExtra < 0) {
       const e = createElement('div', {className: 'line-overflow'})
       this.#elements.overflowArea.appendChild(e)
+      nHave++
+      nExtra++
+    }
+    // Repeat process for line effect elements
+    nHave = this.#elements.lineEffectLayer.children.length
+    nExtra = nHave - nNeed
+    let row = nHave
+    while(nExtra > 0) {
+      this.#elements.lineEffectLayer.lastElementChild.remove()
+      nExtra--
+    }
+    while(nExtra < 0) {
+      const e = createElement('div', {className: 'line-effect', part: 'line-effect'})
+      e.style.gridRow = row + 1
+      row++
+      this.#elements.lineEffectLayer.appendChild(e)
       nHave++
       nExtra++
     }
@@ -2261,23 +2307,9 @@ class MuchText extends HTMLElement {
           this.#elements.curLine.classList.remove('active')
           this.#elements.curLine.part.remove('active-line')
         }
-        if(this.#elements.curLineNum) {
-          this.#elements.curLineNum.classList.remove('active')
-          this.#elements.curLineNum.part.remove('active-line')
-        }
-        if(this.#elements.curLineOver) {
-          this.#elements.curLineOver.classList.remove('active')
-          this.#elements.curLineOver.part.remove('active-line')
-        }
-        this.#elements.curLine = this.#lines[cL].element
-        this.#elements.curLineNum = this.#elements.margin.children[cL]
-        this.#elements.curLineOver = this.#elements.overflowArea.children[cL]
+        this.#elements.curLine = this.#elements.lineEffectLayer.childNodes[cL]
         this.#elements.curLine?.classList.add('active')
-        this.#elements.curLineNum?.classList.add('active')
-        this.#elements.curLineOver?.classList.add('active')
         this.#elements.curLine?.part.add('active-line')
-        this.#elements.curLineNum?.part.add('active-line')
-        this.#elements.curLineOver?.part.add('active-line')
       }
   }
 
