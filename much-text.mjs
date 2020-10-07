@@ -91,12 +91,23 @@ slot {
 #doc.select:focus #caret {
   opacity:         0;
 }
+#doc .line-selection {
+  filter: invert(100%);
+}
 .line-selection {
   height:          calc(var(--line-height));
-  backdrop-filter: sepia(50%) hue-rotate(30deg) invert(100%);
   position:        absolute;
   min-width:       1ch;
+  background:      #A0A0FF;
+  z-index:         -1;
 }
+.line-selection-effect {
+  height:          calc(var(--line-height));
+  position:        absolute;
+  min-width:       1ch;
+  backdrop-filter: invert(100%);
+}
+
 .line, #placeholder {
   grid-column:     2;
   display:         inline-block;
@@ -1794,14 +1805,17 @@ class MuchText extends HTMLElement {
       endLine:     this.#caretLine,
       endColumn:   this.#caretColumn,
       element:     createElement('div', {className: 'selection'}),
+      effectLayer: createElement('div', {className: 'selection-effect-layer'}),
     }
-    this.#elements.doc.appendChild(this.#selection.element)
+    this.#elements.text.before(this.#selection.element)
+    this.#elements.text.after(this.#selection.effectLayer)
     this.#elements.doc.classList.add('select')
   }
 
   #addLineSelection(lineNumber, offset, from, to) {
     const line = this.#lines[lineNumber]
     const eSelection = this.#selection.element
+    const fxSelection = this.#selection.effectLayer
     if(to == null) to = line.chars.length
     //const lineTop = eLine.offsetTop
     const wrap = this.#config.lineWrap
@@ -1815,6 +1829,11 @@ class MuchText extends HTMLElement {
       e.style.left  = `calc(${margin}px + ${from}ch)`
       e.style.width = `calc(${to-from}ch)`
       eSelection.appendChild(e)
+      const fx = createElement('div', {className: 'line-selection-effect'})
+      fx.style.top   = `calc(${offset.top}px + ${offset.row} * calc(var(--line-height)))`
+      fx.style.left  = `calc(${margin}px + ${from}ch)`
+      fx.style.width = `calc(${to-from}ch)`
+      fxSelection.appendChild(fx)
       offset.row++
     } else {
       const fromRow = floor(from / width)
@@ -1827,6 +1846,11 @@ class MuchText extends HTMLElement {
         e.style.left  = `calc(${margin}px + ${left}ch)`
         e.style.width = `calc(${right - left}ch)`
         eSelection.appendChild(e)
+        const fx = createElement('div', {className: 'line-selection-effect'})
+        fx.style.top   = `calc(${offset.top}px + ${offset.row} * calc(var(--line-height)))`
+        fx.style.left  = `calc(${margin}px + ${left}ch)`
+        fx.style.width = `calc(${right - left}ch)`
+        fxSelection.appendChild(fx)
         left = 0
         offset.row++
       }
@@ -1838,6 +1862,7 @@ class MuchText extends HTMLElement {
     const selection = this.#selection
     if(!selection) throw 'no selection'
     Array.from(selection.element.children).map(e => e.remove())
+    Array.from(selection.effectLayer.children).map(e => e.remove())
     const isBackwards = 
       selection.endLine < selection.startLine || 
       selection.endLine == selection.startLine && selection.endColumn < selection.startColumn
@@ -1875,6 +1900,7 @@ class MuchText extends HTMLElement {
   clearSelection() {
     if(!this.#selection) return
     this.#selection.element.remove()
+    this.#selection.effectLayer.remove()
     this.#elements.doc.classList.remove('select')
     this.#selection = null
   }
@@ -1906,6 +1932,7 @@ class MuchText extends HTMLElement {
     this.deleteRange({startLine, startColumn, endLine, endColumn}, true, inputType)
  
     this.#selection.element.remove()
+    this.#selection.effectLayer.remove()
     this.#selection = null
     this.#elements.doc.classList.remove('select')
   }
