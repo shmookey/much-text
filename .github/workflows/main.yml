@@ -21,7 +21,7 @@ jobs:
         run: npm install
 
       - name: start web server for test
-        run: npm start
+        run: npm start &
 
       - name: wget the browserstack local testing binary
         run: wget https://www.browserstack.com/browserstack-local/BrowserStackLocal-linux-x64.zip
