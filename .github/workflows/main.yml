@@ -20,8 +20,8 @@ jobs:
       - name: install dev dependencies
         run: npm install
 
-      - name: start a simple web server
-        run: python3 -m http.server &
+      - name: start web server for test
+        run: npm start
 
       - name: wget the browserstack local testing binary
         run: wget https://www.browserstack.com/browserstack-local/BrowserStackLocal-linux-x64.zip

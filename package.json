@@ -6,12 +6,15 @@
   "directories": {
     "test": "test"
   },
-  "dependencies": {},
+  "dependencies": {
+  },
   "devDependencies": {
     "cypress": "^5.2.0",
-    "browserstack-cypress-cli": "^1.4.0"
+    "browserstack-cypress-cli": "^1.4.0",
+    "http-server": "^0.12.3"
   },
   "scripts": {
+    "start": "npx http-server . -p 8000",
     "test": "cypress run --browser chromium --headless"
   },
   "repository": {
