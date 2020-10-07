@@ -147,7 +147,7 @@ slot {
 #doc.show-line-nums #margin {
   display:         contents;
 }
-#overflow-area, #text, .selection {
+#overflow-area, #text, .selection, .selection-effect-layer {
   display:         contents;
 }
 .line *, .line-selection, #caret, #placeholder {
