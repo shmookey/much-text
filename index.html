@@ -83,7 +83,7 @@ much-text {
   background: #2A2A2A;
 }
 much-text::part(active-line) {
-  background: #444044;
+  backdrop-filter: brightness(150%);
 }
 much-text::part(caret) {
   border-left: 2px solid #EFECEF;
@@ -309,7 +309,7 @@ window.onload = async () => {
   wrap='soft'
   autofocus='true'
   line-nums='on'
-  line-contrast='off'
+  line-contrast='lines'
   cols='80'
   show-boundary='column'
   placeholder='This is a placeholder...'
