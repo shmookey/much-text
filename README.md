@@ -1,6 +1,7 @@
 much-text - text area for code
 ==============================
 
+![Build Status](https://github.com/shmookey/much-text/workflows/Build/badge.svg)
 This README is intended to be read from the much-text demo page: 
 
   https://shmookey.github.io/much-text/
