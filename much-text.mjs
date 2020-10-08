@@ -646,6 +646,7 @@ class MuchText extends HTMLElement {
       visibleRegion:    this.#visibleRegion,
       charWidth:        this.#charWidth,
       charHeight:       this.#charHeight,
+      marginWidth:      this.#marginWidth,
     }
   }
 
@@ -1976,7 +1977,7 @@ class MuchText extends HTMLElement {
   }
 
   /** Select text within a given range, clobbering any previous selection. */
-  #selectRange(range) {
+  selectRange(range) {
     this.#startSelection()
     this.#selection.startLine = range.startLine
     this.#selection.startColumn = range.startColumn
@@ -1995,7 +1996,7 @@ class MuchText extends HTMLElement {
       if(WORD_BREAK_CHARS.includes(line.chars[from])) break
     for(to = this.#caretColumn; to < line.chars.length; to++)
       if(WORD_BREAK_CHARS.includes(line.chars[to])) break
-    this.#selectRange({startLine: row, startColumn: from + 1, endLine: row, endColumn: to})
+    this.selectRange({startLine: row, startColumn: from + 1, endLine: row, endColumn: to})
   }
 
   #selectAll() {
