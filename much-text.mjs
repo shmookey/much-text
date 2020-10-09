@@ -39,7 +39,7 @@ const htmlSource = `
   font-variant-numeric: tabular-nums;
   resize:          auto;
   cursor:          text;
-  contain:         size layout;
+  contain:         size;
 }
 slot {
   display:         none;
@@ -76,39 +76,9 @@ slot {
   word-break:      normal;
   width:           fit-content;
 }
-#caret {
-  display:         inline-block;
-  font-family:     Consolas,Monaco,Lucida Console,Liberation Mono,DejaVu Sans Mono,Bitstream Vera Sans Mono,Courier New, monospace, serif;
-  font-size:       13px;
-  height:          calc(var(--line-height));
-  width:           1ch;
+#line-effect-layer > * {
   position:        absolute;
-  border-left:     1px solid #08080F;
-  opacity:         0;
 }
-#doc:focus #caret {
-  opacity:         1;
-}
-#doc.select:focus #caret {
-  opacity:         0;
-}
-#doc .line-selection {
-  filter: invert(100%);
-}
-.line-selection {
-  height:          calc(var(--line-height));
-  position:        absolute;
-  min-width:       1ch;
-  background:      #3297FD;
-  z-index:         -1;
-}
-.line-selection-effect {
-  height:          calc(var(--line-height));
-  position:        absolute;
-  min-width:       1ch;
-  backdrop-filter: invert(100%);
-}
-
 .line-effect {
   grid-column:     1/4;
   grid-row-end:    span 1;
@@ -116,6 +86,9 @@ slot {
   right:           0;
   top:             0;
   bottom:          0;
+}
+.line {
+  z-index:         1;
 }
 .line, #placeholder {
   grid-column:     2;
@@ -160,10 +133,23 @@ slot {
   display:         contents;
 }
 
-
 .line *, .line-selection, #caret, #placeholder {
   pointer-events:  none;
 }
+
+#placeholder {
+  position:   absolute;
+  opacity:    50%;
+  top:        0;
+  background: transparent;
+}
+
+
+
+/*
+ *    LINE CONTRAST
+ */
+
 #doc.alternating-rows {
   background:      repeating-linear-gradient(to bottom, #2F2D2F 0px, #2F2D2F 20px, #2A2A2A 20px, #2A2A2A 40px);
 }
@@ -178,6 +164,13 @@ slot {
 #doc.alternating-lines.no-wrap {
   background: repeating-linear-gradient(to bottom, #2F2D2F 0px, #2F2D2F 20px, #2A2A2A 20px, #2A2A2A 40px);
 }
+
+
+
+/*
+ *    CONTEXT MENU
+ */
+
 #contextMenu {
   position: fixed;
   width: fit-content;
@@ -213,12 +206,87 @@ slot {
   border-bottom: 1px solid #B0B0B0;
   margin-bottom: 0.5em;
 }
-#placeholder {
-  position:   absolute;
-  opacity:    50%;
-  top:        0;
-  background: transparent;
+
+
+
+/*
+ *    CARET
+ */
+
+#caret {
+  display:         inline-block;
+  font-family:     Consolas,Monaco,Lucida Console,Liberation Mono,DejaVu Sans Mono,Bitstream Vera Sans Mono,Courier New, monospace, serif;
+  font-size:       13px;
+  height:          calc(var(--line-height));
+  width:           1ch;
+  position:        absolute;
+  border-left:     1px solid #08080F;
+  opacity:         0;
 }
+#doc.select:focus #caret {
+  opacity:         0;
+}
+#doc:focus #caret {
+  opacity:         1;
+}
+#doc.select:focus #caret {
+  opacity:         0;
+}
+
+
+
+/*
+ *    LAYERS
+ */
+
+#selection-background-layer,
+#selection-foreground-layer,
+#line-effect-layer {
+  display:         contents;
+}
+
+
+
+/*
+ *    SELECTION
+ */
+
+#selection-background-layer > *,
+#selection-foreground-layer > * {
+  grid-column:     2 / span 1;
+  grid-row-end:    span 1;
+  position:        absolute;
+  top:             0;
+  bottom:          0;
+  left:            0;
+  right:           0;
+}
+
+#selection-background-layer > * {
+}
+
+#selection-foreground-layer > * {
+  z-index:         1;
+}
+
+#selection-background-layer span {
+  background:      #3297FD;
+}
+
+#doc.enable-selection-effects #selection-background-layer span {
+  filter:          invert(100%);
+}
+
+#selection-foreground-layer span {
+  backdrop-filter: invert(100%);
+}
+
+
+
+/*
+ *    RULER
+ */
+
 #ruler {
   position: sticky;
   left: 0;
@@ -237,25 +305,6 @@ slot {
 }
 #ruler #position {
 }
-
-
-
-/*
- *    LAYERS
- */
-
-#selection-background-layer,
-#selection-foreground-layer,
-#line-effect-layer {
-  display:         contents;
-}
-
-#selection-background-layer > *,
-#selection-foreground-layer > *,
-#line-effect-layer > * {
-  position:        absolute;
-}
-
 </style>
 <div id='doc' part='doc' tabindex='0'>
   <div id='line-effect-layer'></div>
@@ -313,9 +362,10 @@ function createContextMenu(items) {
 }
 
 
-function createElement(tagName, props=null) {
+function createElement(tagName, props=null, styles=null) {
   const e = document.createElement(tagName)
   if(props) for(let [k,v] of Object.entries(props)) e[k] = v
+  if(styles) for(let [k,v] of Object.entries(styles)) e.style[k] = v
   return e
 }
 
@@ -383,6 +433,62 @@ function pullRangeBack(a, b, cols=Infinity) {
     endLine: end[0], endColumn: end[1]}
 }
 
+/** Compare two line sets.
+ *
+ * Arguments:
+ *   as - Reference line set ('before')
+ *   bs - Comparison line set ('after')
+ *
+ * Returns:
+ *   A lineset diff object, with three properties `insertions`, `deletions` and
+ *   `alterations` which are lists of line selection triples [line, start, end].
+ *
+ * This function computes the set of insertions, deletions and alterations on
+ * line set `as` to yield line set `bs`. Insertions occur when a line number in
+ * `bs` does not occur in `as`. Deletions occur when a line number in `as` does
+ * not occur in `bs`. Alterations occur when a line number occurs in both line
+ * sets, but the start and/or end columns are different. For insertions and
+ * alterations, the line selection triple from `bs` is added to the insertions
+ * or alterations list respectively. For deletions, the triple from `as` is
+ * added to the deletions list.
+ * 
+ * The arguments must be sorted by line number.
+ */
+function diffLineSets(as, bs) {
+  const buf = {insertions: [], deletions: [], alterations: []}
+  let ai = 0
+  let bi = 0
+  while(true) {
+    let a = as[ai]
+    let b = bs[bi]
+    if(!a && !b) {
+      break
+    } else if(a && !b) {
+      buf.deletions.push(a)
+      ai++
+    } else if(b && !a) {
+      buf.insertions.push(b)
+      bi++
+    } else {
+      if(a[0] < b[0]) {
+        buf.deletions.push(a)
+        ai++
+      } else if(b[0] < a[0]) {
+        buf.insertions.push(b)
+        bi++
+      } else if(a[1] != b[1] || a[2] != b[2]) {
+        buf.alterations.push(b)
+        ai++
+        bi++
+      } else {
+        ai++
+        bi++
+      } 
+    }
+  }
+  return buf
+}
+
 
 
 class MuchInputEvent extends InputEvent {
@@ -414,6 +520,8 @@ class MuchText extends HTMLElement {
   #config
   #lines
   #selection
+  #selectionLineSet
+  #selectionElements
   #visibleRegion
   #elements
   #changed
@@ -450,6 +558,7 @@ class MuchText extends HTMLElement {
       rowNavigation : true,
       eolNavigation : true,
       showRuler     : true,
+      selectionFx   : false,
     }
     this.#history = {
       buffer: [],
@@ -486,6 +595,8 @@ class MuchText extends HTMLElement {
     }
     this.#refreshScheduled = false
     this.#ctxMenuOpen = false
+    this.#selectionLineSet = []
+    this.#selectionElements = []
     this.#changed = {
       contentBox:    false,
       textBox:       false,
@@ -791,7 +902,7 @@ class MuchText extends HTMLElement {
   static get observedAttributes() {
     return ['cols', 'wrap', 'line-nums', 'line-contrast', 'placeholder',
       'disabled', 'readonly', 'show-boundary', 'row-navigation', 'eol-navigation',
-      'undo-depth']
+      'undo-depth', 'selection-effects']
   }
 
   attributeChangedCallback(name, old, val) {
@@ -824,6 +935,15 @@ class MuchText extends HTMLElement {
     case 'eol-navigation':
       if(val == 'wrap')     this.#config.eolNavigation = true
       else if(val == 'off') this.#config.eolNavigation = false
+      break
+    case 'selection-effects':
+      if(val == 'overlay') {
+        this.#config.selectionFx = true
+        this.#elements.doc.classList.add('enable-selection-effects')
+      } else if(val == 'off') {
+        this.#config.selectionFx = false
+        this.#elements.doc.classList.remove('enable-selection-effects')
+      }
       break
     case 'line-nums':
       if(val == 'on') this.#enableLineNumbers()
@@ -881,6 +1001,8 @@ class MuchText extends HTMLElement {
   set rowNavigation(x)    { this.setAttribute('row-navigation', x) }
   get showBoundary()      { return this.#config.showBoundary ? 'column' : 'off' }
   set showBoundary(x)     { this.setAttribute('show-boundary', x) }
+  get selectionEffects()  { return this.#config.selectionFx ? 'overlay' : 'off' }
+  set selectionEffects(x) { this.setAttribute('selection-effects', x) }
   get type()              { return this.localName; }
   get undoDepth()         { return this.#config.undoDepth }
   set undoDepth(x)        { this.setAttribute('undo-depth', x) }
@@ -1071,7 +1193,7 @@ class MuchText extends HTMLElement {
     //this.#elements.margin.style.display = 'contents'
     this.#marginWidth = 50
     this.#config.lineNums = true
-    if(this.#selection) this.#highlightSelection()
+    this.setSelection(this.#selection)
     this.#changed.marginWidth = true
     this.#scheduleRefresh()
   }
@@ -1081,7 +1203,7 @@ class MuchText extends HTMLElement {
     //this.#elements.margin.style.display = 'none'
     this.#marginWidth = 0
     this.#config.lineNums = false
-    if(this.#selection) this.#highlightSelection()
+    this.setSelection(this.#selection)
     this.#changed.marginWidth = true
     this.#scheduleRefresh()
   }
@@ -1821,10 +1943,94 @@ class MuchText extends HTMLElement {
    *                                                                         *
    ***************************************************************************/
 
+  /* Selections are displayed using <div>s in the selection-background layer
+   * for each line that contains selected characters, with the same dimensions
+   * as the line box, which contains a <span> that is sized (using spaces) and
+   * positioned (using margin-left) to occupy the same area as the selected
+   * characters. Optionally, this is mirrored on the selection-foreground.
+   *
+   * The "line set" of a selection is an array of triples [line, start, end]
+   * of integer values representing the selected columns for each line that
+   * contains selected characters. When the selection changes (e.g. in response
+   * to pointer movement during a mouse drag operation) a new line set is
+   * generated and compared to the previous (or "active") line set using a
+   * diffing algorithm. The algorithm determines the minimal set of insertions,
+   * deletions and alterations required to update the DOM to reflect the new
+   * selection.
+   */
+
 
   get selectedRange() {
     if(!this.#selection) return null
     else return {...this.#selection}
+  }
+
+  #createLineSet(range) {
+    if(!range) return []
+    range = this.#normalizeRange(range)
+    const buf = []
+    let row = range.startLine
+    let col = range.startColumn
+    let i = 0
+    for(i=range.startLine; i<range.endLine; i++) {
+      const end = this.#lines[i].chars.length
+      buf.push([i, col, end])
+      col = 0
+    }
+    buf.push([i, col, range.endColumn])
+    return buf
+  }
+
+  setSelection(range) {
+    const elems   = this.#selectionElements
+    const lineset = this.#createLineSet(range)
+    const diff    = diffLineSets(this.#selectionLineSet, lineset)
+    const newBgDivs = []
+    const newFxDivs = []
+
+    for(let [line, start, end] of diff.insertions) {
+      if(elems[line]) throw 'Internal error'
+      const bgDiv = createElement('div', {}, {gridRowStart: line + 1})
+      const bgSpan = createElement('span', {
+        className:  'span',
+        part:       'selection',
+        textContent: Array(end-start).fill(' ').join(''),
+      }, {marginLeft: `${start}ch`})
+      bgDiv.append(bgSpan)
+      newBgDivs.push(bgDiv)
+
+      let fxDiv = null, fxSpan = null
+      if(this.#config.selectionFx) {
+        fxDiv = bgDiv.cloneNode()
+        fxSpan = bgSpan.cloneNode()
+        fxSpan.part = 'selection-effect'
+        fxSpan.textContent = Array(end-start).fill(' ').join('')
+        fxDiv.append(fxSpan)
+        newFxDivs.push(fxDiv)
+      }
+
+      elems[line] = [bgDiv, bgSpan, fxDiv, fxSpan]
+    }
+    for(let [line, start, end] of diff.deletions) {
+      elems[line][0].remove()
+      elems[line][2]?.remove()
+      delete elems[line]
+    }
+    for(let [line, start, end] of diff.alterations) {
+      const bgSpan = elems[line][1]
+      const fxSpan = elems[line][3]
+      bgSpan.textContent       = Array(end-start).fill(' ').join('')
+      bgSpan.style.marginLeft  = `${start}ch`
+      if(fxSpan) {
+        fxSpan.textContent      = Array(end-start).fill(' ').join('')
+        fxSpan.style.marginLeft = `${start}ch`
+      }
+    }
+
+    this.#elements.selectionBackgroundLayer.append(...newBgDivs)
+    this.#elements.selectionForegroundLayer.append(...newFxDivs)
+    this.#selection = range
+    this.#selectionLineSet = lineset
   }
 
   #startSelection() {
@@ -1834,117 +2040,115 @@ class MuchText extends HTMLElement {
       startColumn: this.#caretColumn,
       endLine:     this.#caretLine,
       endColumn:   this.#caretColumn,
-//      element:     createElement('div', {className: 'selection'}),
-//      effectLayer: createElement('div', {className: 'selection-effect-layer'}),
     }
-//    this.#elements.text.before(this.#selection.element)
-//    this.#elements.text.after(this.#selection.effectLayer)
     this.#elements.doc.classList.add('select')
   }
 
-  #addLineSelection(lineNumber, offset, from, to) {
-    const line = this.#lines[lineNumber]
-    const eSelection  = this.#elements.selectionBackgroundLayer
-    const fxSelection = this.#elements.selectionForegroundLayer
-    if(to == null) to = line.chars.length
-    const wrap = this.#config.lineWrap
-    const cols = this.#config.cols
-    const width = cols == null ? this.#textBox.cols : cols
-    const margin = this.#marginWidth
-
-    const mkLineSel = () => createElement('div', {
-      className: 'line-selection', 
-      part:      'line-selection'
-    })
-    const mkLineFX = () => createElement('div', {
-      className: 'line-selection-effect',
-      part:      'line-selection-effect'
-    })
-
-    if(to <= width || !this.#config.lineWrap) {
-      const e = mkLineSel()
-      e.style.gridRow = lineNumber+1
-      e.style.left  = `calc(${margin}px + ${from}ch)`
-      e.style.width = `calc(${to-from}ch)`
-      eSelection.appendChild(e)
-      const fx = mkLineFX() 
-      fx.style.gridRow = lineNumber+1
-      fx.style.left  = `calc(${margin}px + ${from}ch)`
-      fx.style.width = `calc(${to-from}ch)`
-      fxSelection.appendChild(fx)
-      offset.row++
-    } else {
-      const fromRow = floor(from / width)
-      const toRow = floor(to / width)
-      let left = from % width
-      let j = 1
-      for(let i=fromRow; i<=toRow; i++) {
-        const right = i<toRow ? width : (to % width)
-        const e = mkLineSel()
-        e.style.gridRow = lineNumber+1  
-        e.style.top   = `calc(${i} * calc(var(--line-height)))`
-        e.style.left  = `calc(${margin}px + ${left}ch)`
-        e.style.width = `calc(${right - left}ch)`
-        eSelection.appendChild(e)
-        const fx = mkLineFX()
-        fx.style.gridRow = lineNumber+1
-        fx.style.top   = `calc(${i} * calc(var(--line-height)))`
-        fx.style.left  = `calc(${margin}px + ${left}ch)`
-        fx.style.width = `calc(${right - left}ch)`
-        fxSelection.appendChild(fx)
-        left = 0
-        offset.row++
-        j++
-      }
-    }
-  }
+//  #addLineSelection(lineNumber, offset, from, to) {
+//    const line = this.#lines[lineNumber]
+//    const eSelection  = this.#elements.selectionBackgroundLayer
+//    const fxSelection = this.#elements.selectionForegroundLayer
+//    if(to == null) to = line.chars.length
+//    const wrap = this.#config.lineWrap
+//    const cols = this.#config.cols
+//    const width = cols == null ? this.#textBox.cols : cols
+//    const margin = this.#marginWidth
+//
+//    const mkLineSel = () => createElement('div', {
+//      className: 'line-selection', 
+//      part:      'line-selection'
+//    })
+//    const mkLineFX = () => createElement('div', {
+//      className: 'line-selection-effect',
+//      part:      'line-selection-effect'
+//    })
+//
+//    if(to <= width || !this.#config.lineWrap) {
+//      const e = mkLineSel()
+//      e.style.gridRow = lineNumber+1
+//      e.style.left  = `calc(${margin}px + ${from}ch)`
+//      e.style.width = `calc(${to-from}ch)`
+//      eSelection.appendChild(e)
+//      const fx = mkLineFX() 
+//      fx.style.gridRow = lineNumber+1
+//      fx.style.left  = `calc(${margin}px + ${from}ch)`
+//      fx.style.width = `calc(${to-from}ch)`
+//      fxSelection.appendChild(fx)
+//      offset.row++
+//    } else {
+//      const fromRow = floor(from / width)
+//      const toRow = floor(to / width)
+//      let left = from % width
+//      let j = 1
+//      for(let i=fromRow; i<=toRow; i++) {
+//        const right = i<toRow ? width : (to % width)
+//        const e = mkLineSel()
+//        e.style.gridRow = lineNumber+1  
+//        e.style.top   = `calc(${i} * calc(var(--line-height)))`
+//        e.style.left  = `calc(${margin}px + ${left}ch)`
+//        e.style.width = `calc(${right - left}ch)`
+//        eSelection.appendChild(e)
+//        const fx = mkLineFX()
+//        fx.style.gridRow = lineNumber+1
+//        fx.style.top   = `calc(${i} * calc(var(--line-height)))`
+//        fx.style.left  = `calc(${margin}px + ${left}ch)`
+//        fx.style.width = `calc(${right - left}ch)`
+//        fxSelection.appendChild(fx)
+//        left = 0
+//        offset.row++
+//        j++
+//      }
+//    }
+//  }
 
   /** Render the selection. Both accesses and changes DOM and styles! */
-  #highlightSelection() {
-    const selection = this.#selection
-    if(!selection) throw 'no selection'
-    Array.from(this.#elements.selectionBackgroundLayer.childNodes).map(e => e.remove())
-    Array.from(this.#elements.selectionForegroundLayer.childNodes).map(e => e.remove())
-    const isBackwards = 
-      selection.endLine < selection.startLine || 
-      selection.endLine == selection.startLine && selection.endColumn < selection.startColumn
-
-    const startLine   = isBackwards ? selection.endLine : selection.startLine
-    const endLine     = isBackwards ? selection.startLine : selection.endLine
-    const startColumn = isBackwards ? selection.endColumn : selection.startColumn
-    const endColumn   = isBackwards ? selection.startColumn : selection.endColumn
-    
-    let left = startColumn
-    let offset = {
-      top: this.#lineDocOffset(startLine), // this.#lines[startLine].element.offsetTop,
-      row: 0,
-    }
-    let cols = this.#textBox.cols
-    if(this.#config.lineWrap && startColumn > cols) {
-      offset.top += floor(startColumn / cols) * this.#charHeight
-    }
-    for(let i=startLine; i<=endLine; i++) {
-      let right = i==endLine ? endColumn : null
-      this.#addLineSelection(i, offset, left, right)
-      left = 0
-    }
-  }
+//  #highlightSelection() {
+//    const selection = this.#selection
+//    if(!selection) throw 'no selection'
+//    Array.from(this.#elements.selectionBackgroundLayer.childNodes).map(e => e.remove())
+//    Array.from(this.#elements.selectionForegroundLayer.childNodes).map(e => e.remove())
+//    const isBackwards = 
+//      selection.endLine < selection.startLine || 
+//      selection.endLine == selection.startLine && selection.endColumn < selection.startColumn
+//
+//    const startLine   = isBackwards ? selection.endLine : selection.startLine
+//    const endLine     = isBackwards ? selection.startLine : selection.endLine
+//    const startColumn = isBackwards ? selection.endColumn : selection.startColumn
+//    const endColumn   = isBackwards ? selection.startColumn : selection.endColumn
+//    
+//    let left = startColumn
+//    let offset = {
+//      top: this.#lineDocOffset(startLine), // this.#lines[startLine].element.offsetTop,
+//      row: 0,
+//    }
+//    let cols = this.#textBox.cols
+//    if(this.#config.lineWrap && startColumn > cols) {
+//      offset.top += floor(startColumn / cols) * this.#charHeight
+//    }
+//    for(let i=startLine; i<=endLine; i++) {
+//      let right = i==endLine ? endColumn : null
+//      this.#addLineSelection(i, offset, left, right)
+//      left = 0
+//    }
+//  }
 
   #selectToCaret() {
     const selection = this.#selection
     if(!selection) throw 'no selection'
     selection.endLine   = this.#caretLine
     selection.endColumn = this.#caretColumn
-    this.#changed.selection = true
-    this.#scheduleRefresh()
+//    this.#changed.selection = true
+//    this.#scheduleRefresh()
+    this.setSelection(selection)
   }
 
   clearSelection() {
     if(!this.#selection) return
-    Array.from(this.#elements.selectionBackgroundLayer.childNodes).map(e => e.remove())
-    Array.from(this.#elements.selectionForegroundLayer.childNodes).map(e => e.remove())
+//    Array.from(this.#elements.selectionBackgroundLayer.childNodes).map(e => e.remove())
+//    Array.from(this.#elements.selectionForegroundLayer.childNodes).map(e => e.remove())
     this.#elements.doc.classList.remove('select')
     this.#selection = null
+    this.setSelection(null)
   }
 
   getSelection() {
@@ -1962,17 +2166,7 @@ class MuchText extends HTMLElement {
 
   deleteSelection(inputType='deleteContent') {
     if(!this.#selection) return
-    const selection = this.#selection
-    const isBackwards = 
-      selection.endLine < selection.startLine || 
-      selection.endLine == selection.startLine && selection.endColumn < selection.startColumn
-    const startLine   = isBackwards ? selection.endLine : selection.startLine
-    const endLine     = isBackwards ? selection.startLine : selection.endLine
-    const startColumn = isBackwards ? selection.endColumn : selection.startColumn
-    const endColumn   = isBackwards ? selection.startColumn : selection.endColumn
- 
-    this.deleteRange({startLine, startColumn, endLine, endColumn}, true, inputType)
- 
+    this.deleteRange(this.#normalizeRange(this.#selection), true, inputType)
     this.clearSelection()
   }
 
@@ -1983,8 +2177,9 @@ class MuchText extends HTMLElement {
     this.#selection.startColumn = range.startColumn
     this.#selection.endLine = range.endLine
     this.#selection.endColumn = range.endColumn
-    this.#changed.selection = true
-    this.#scheduleRefresh()
+    this.setSelection(this.#selection)
+    //this.#changed.selection = true
+    //this.#scheduleRefresh()
   }
 
   /** Select a region contained between the nearest whitespace to the caret. */
@@ -2010,8 +2205,9 @@ class MuchText extends HTMLElement {
       //element:     this.#selection.element,
       //effectLayer: this.#selection.effectLayer,
     }
-    this.#changed.selection = true
-    this.#scheduleRefresh()
+    this.setSelection(this.#selection)
+    //this.#changed.selection = true
+    //this.#scheduleRefresh()
   }
 
 
@@ -2127,8 +2323,8 @@ class MuchText extends HTMLElement {
       visibleRegionChanged = this.#determineVisibleRegion()
     if(refreshVisibleContent || visibleRegionChanged)
       this.#updateVisibleRegion()
-    if(refreshSelection && this.#selection) 
-      this.#highlightSelection()
+    if(refreshSelection)
+      this.setSelection(this.#selection) 
     if(refreshStyles) 
       this.#updateStyles()
     if(refreshCaret)
