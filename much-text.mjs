@@ -170,6 +170,7 @@ slot {
   font-family: system-ui;
   font-size: 1.0em;
   padding: 5px 0px;
+  z-index: 1;
 }
 #contextMenu:focus {
   outline: none;
