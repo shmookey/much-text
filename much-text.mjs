@@ -129,11 +129,11 @@ slot {
 #doc.show-line-nums #margin {
   display:         contents;
 }
-#overflow-area, #text, .selection {
+#overflow-area, #text {
   display:         contents;
 }
 
-.line *, .line-selection, #caret, #placeholder {
+.line *, #caret, #placeholder {
   pointer-events:  none;
 }
 
@@ -150,19 +150,8 @@ slot {
  *    LINE CONTRAST
  */
 
-#doc.alternating-rows {
-  background:      repeating-linear-gradient(to bottom, #2F2D2F 0px, #2F2D2F 20px, #2A2A2A 20px, #2A2A2A 40px);
-}
 #doc.alternating-lines #line-effect-layer .line-effect:nth-child(odd) { 
   backdrop-filter: brightness(110%);
-}
-#doc.alternating-lines.no-wrap .line:nth-child(odd), 
-#doc.alternating-lines.no-wrap .line-number:nth-child(odd),
-#doc.alternating-lines.no-wrap .line-overflow:nth-child(odd) {
-  background: none;
-}
-#doc.alternating-lines.no-wrap {
-  background: repeating-linear-gradient(to bottom, #2F2D2F 0px, #2F2D2F 20px, #2A2A2A 20px, #2A2A2A 40px);
 }
 
 
@@ -266,22 +255,26 @@ slot {
 }
 
 #selection-foreground-layer > * {
-  z-index:         1;
+  z-index:            1;
 }
 
-#selection-background-layer span {
-  background:      #3297FD;
+.selection,
+.selection-effect {
+  height:          calc(var(--line-height));
+  min-width:       1ch;
+  position:        absolute;
 }
 
-#doc.enable-selection-effects #selection-background-layer span {
-  filter:          invert(100%);
+.selection {
+  background:      #3390FF;
 }
-
-#selection-foreground-layer span {
+.selection-effect {
   backdrop-filter: invert(100%);
 }
 
-
+#doc.enable-selection-effects .selection {
+  filter:          invert(100%);
+}
 
 /*
  *    RULER
@@ -313,9 +306,9 @@ slot {
   <div id='text' part='text'>
     <div id='placeholder' part='placeholder'></div>
   </div>
-  <div id='overflow-area' part='overflow-area'></div>
   <div id='boundary' part='boundary'></div>
-  <div id='selection-foreground-layer'></div>
+  <div id='selection-foreground-layer'>
+  </div>
   <div id='caret' part='caret'></div>
 </div>
 <slot></slot>
@@ -658,7 +651,6 @@ class MuchText extends HTMLElement {
       doc:          this.shadowRoot.querySelector('#doc'), 
       margin:       this.shadowRoot.querySelector('#margin'), 
       text:         this.shadowRoot.querySelector('#text'), 
-      overflowArea: this.shadowRoot.querySelector('#overflow-area'), 
       placeholder:  this.shadowRoot.querySelector('#placeholder'), 
       boundary:     this.shadowRoot.querySelector('#boundary'), 
       caret:        this.shadowRoot.querySelector('#caret'), 
@@ -927,6 +919,7 @@ class MuchText extends HTMLElement {
       }
       this.#changed.wrapMode = true
       this.#scheduleRefresh()
+      this.#resetSelection()
       break
     case 'row-navigation':
       if(val == 'row')       this.#config.rowNavigation = true
@@ -944,10 +937,12 @@ class MuchText extends HTMLElement {
         this.#config.selectionFx = false
         this.#elements.doc.classList.remove('enable-selection-effects')
       }
+      this.#resetSelection()
       break
     case 'line-nums':
       if(val == 'on') this.#enableLineNumbers()
       else if(val == 'off') this.#disableLineNumbers()
+      this.#resetSelection()
       break
     case 'line-contrast':
       if(val == 'lines') this.#enableLineContrast(true)
@@ -972,6 +967,7 @@ class MuchText extends HTMLElement {
         const x = Number.parseInt(val)
         this.#setCols(x)
       } 
+      this.#resetSelection()
       break
     case 'undo-depth':
       this.#setUndoDepth(Number.parseInt(x))
@@ -1981,54 +1977,82 @@ class MuchText extends HTMLElement {
     return buf
   }
 
+  #createLineBoxes(line, start, end, cls='selection') {
+    const len  = this.#lines[line].chars.length
+    const cols = this.#config.lineWrap ? (this.#config.cols ? this.#config.cols
+                                                            : this.#textBox.cols)
+                                       : len+1
+    const buf  = []
+    let i = start
+    let r = floor(start / cols)
+    while(true) {
+      const boundary = ceil((i+0.1)/cols)*cols
+      if(end <= boundary) {
+        buf.push([r, i % cols, end - i])
+        break
+      } else {
+        buf.push([r, i % cols, boundary - i])
+        r++
+        i = boundary
+      }
+    }
+    
+    const rows = buf.map(([r,l,w]) => createElement('div', {
+      className: cls,
+      part:      cls,
+    }, {
+      top:        `calc(var(--line-height) * ${r})`,
+      marginLeft: `${l}ch`,
+      width:      `${w}ch`,
+    }))
+    const elem = createElement('div', {}, {gridRowStart: line+1})
+    elem.append(...rows)
+    return elem
+  }
+
+  #resetSelection() {
+    const sel = this.#selection
+    this.setSelection(null)
+    this.setSelection(sel)
+  }
+
   setSelection(range) {
     const elems   = this.#selectionElements
     const lineset = this.#createLineSet(range)
     const diff    = diffLineSets(this.#selectionLineSet, lineset)
-    const newBgDivs = []
-    const newFxDivs = []
 
     for(let [line, start, end] of diff.insertions) {
       if(elems[line]) throw 'Internal error'
-      const bgDiv = createElement('div', {}, {gridRowStart: line + 1})
-      const bgSpan = createElement('span', {
-        className:  'span',
-        part:       'selection',
-        textContent: Array(end-start).fill(' ').join(''),
-      }, {marginLeft: `${start}ch`})
-      bgDiv.append(bgSpan)
-      newBgDivs.push(bgDiv)
+      const bgDiv = this.#createLineBoxes(line, start, end)
+      this.#elements.selectionBackgroundLayer.append(bgDiv)
 
-      let fxDiv = null, fxSpan = null
+      let fxDiv = null
       if(this.#config.selectionFx) {
-        fxDiv = bgDiv.cloneNode()
-        fxSpan = bgSpan.cloneNode()
-        fxSpan.part = 'selection-effect'
-        fxSpan.textContent = Array(end-start).fill(' ').join('')
-        fxDiv.append(fxSpan)
-        newFxDivs.push(fxDiv)
+        fxDiv = this.#createLineBoxes(line, start, end, 'selection-effect')
+        this.#elements.selectionForegroundLayer.append(fxDiv)
       }
 
-      elems[line] = [bgDiv, bgSpan, fxDiv, fxSpan]
+      elems[line] = [bgDiv, fxDiv]
     }
     for(let [line, start, end] of diff.deletions) {
       elems[line][0].remove()
-      elems[line][2]?.remove()
+      elems[line][1]?.remove()
       delete elems[line]
     }
     for(let [line, start, end] of diff.alterations) {
-      const bgSpan = elems[line][1]
-      const fxSpan = elems[line][3]
-      bgSpan.textContent       = Array(end-start).fill(' ').join('')
-      bgSpan.style.marginLeft  = `${start}ch`
-      if(fxSpan) {
-        fxSpan.textContent      = Array(end-start).fill(' ').join('')
-        fxSpan.style.marginLeft = `${start}ch`
+      if(!elems[line]) throw 'Internal error'
+      const bgDiv = this.#createLineBoxes(line, start, end)
+      elems[line][0].replaceWith(bgDiv)
+
+      let fxDiv = null
+      if(this.#config.selectionFx) {
+        fxDiv = this.#createLineBoxes(line, start, end, 'selection-effect')
+        elems[line][1].replaceWith(fxDiv)
       }
+
+      elems[line] = [bgDiv, fxDiv]
     }
 
-    this.#elements.selectionBackgroundLayer.append(...newBgDivs)
-    this.#elements.selectionForegroundLayer.append(...newFxDivs)
     this.#selection = range
     this.#selectionLineSet = lineset
   }
@@ -2370,19 +2394,6 @@ class MuchText extends HTMLElement {
       const e = createElement('div', {className: 'line-number'})
       e.innerText = nHave + 1
       this.#elements.margin.appendChild(e)
-      nHave++
-      nExtra++
-    }
-    // Repeat process for overflow area
-    nHave = this.#elements.overflowArea.children.length
-    nExtra = nHave - nNeed
-    while(nExtra > 0) {
-      this.#elements.overflowArea.lastElementChild.remove()
-      nExtra--
-    }
-    while(nExtra < 0) {
-      const e = createElement('div', {className: 'line-overflow'})
-      this.#elements.overflowArea.appendChild(e)
       nHave++
       nExtra++
     }
