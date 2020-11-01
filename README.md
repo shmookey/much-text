@@ -72,28 +72,31 @@ proper types in JavaScript.
 
 The following new attributes are defined:
 
-  line-nums      Show line numbers in the margin.
-                 Values: on, off
+  line-nums         Show line numbers in the margin.
+                    Values: on, off
 
-  line-contrast  Use an alternating dimming effect to make lines clearer. Lines
-                 can mean logical lines of text (may be taller if wrapped), or
-                 visual 'rows' that are always 1 character tall.
-                 Values: lines, rows, off
+  line-contrast     Use an alternating dimming effect to make lines clearer.
+                    Lines can mean logical lines of text (may be taller if
+                    wrapped), or visual 'rows' that are 1 character tall.
+                    Values: lines, rows, off
 
-  show-boundary  Show a line at the boundary specified by the `cols` or `rows`
-                 attribute.
-                 Values: column, off
+  show-boundary     Mark the `cols` boundary with a line.
+                    Values: column, off
 
-  row-navigation Control whether the up and down arrow keys move by one visual
-                 "row" or one logical "line". Default: row.
-                 Values: row, line
+  row-navigation    Control whether the up and down arrow keys move by one row
+                    or a whole logical "line". Default: row.
+                    Values: row, line
   
-  eol-navigation Control whether the left and right arrow keys will wrap the
-                 caret onto the previous/next line. Default: wrap.
-                 Values: wrap, off
+  eol-navigation    Control whether the left and right arrow keys will wrap the
+                    caret onto the previous/next line. Default: wrap.
+                    Values: wrap, off
 
-  undo-depth     Maximum number of entries in history buffer.
-                 Values: <integer>
+  undo-depth        Maximum number of entries in history buffer.
+                    Values: <integer>
+
+  selection-effects Enable a visual effect to make highlighted text clearer. By
+                    default this inverts the colour of selected text.
+                    Values: overlay, off
 
 
 #    STYLING

@@ -2,145 +2,7 @@
 <head>
   <script src='much-text.mjs' type='module'></script>
   <script src='annotate-markdown.js'></script>
-  <style>
-* {
-  box-sizing: border-box;
-}
-body {
-  width: 100vw;
-  height: 100vh;
-  background: #222022;
-  margin: 0;
-  display: flex;
-  color: #DFDCDF;
-  align-items: stretch;
-}
-much-text {
-  width: calc(100% - 300px);
-  margin: 20px;
-}
-#panel {
-  width: 300px;
-  min-width: 300px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 10px;
-}
-#panel .heading, #panel .title, #panel label {
-  user-select: none;
-}
-#panel .heading {
-  font-size: 1.2em;
-  font-weight: bold;
-  margin-top: 30px;
-  margin-bottom: 15px;
-  align-self: flex-start;
-}
-#panel .title {
-  font-size: 2em;
-  font-weight: bold;
-  margin: 50px 0;
-}
-#panel .settings {
-  display: grid;
-  width: 90%;
-  grid-template-columns: 3fr 2fr;
-  grid-auto-flow: dense;
-  row-gap: 10px;
-}
-#panel .settings.attributes label {
-  font-family: monospace;
-}
-#panel .settings label {
-  grid-column: 1;
-}
-#panel .settings input, #panel .settings select {
-  grid-column: 2;
-  width: inherit;
-}
-#example {
-  white-space: break-spaces;
-  word-break: break-all;
-  border: 1px dashed #DFDCDF;
-  padding: 5px;
-  font-size: 8pt;
-}
-/* dark theme */
-much-text {
-  background: #2A2A2A;
-  color: #DFDCDF;
-  outline: none; 
-}
-.dark-mode much-text::-webkit-scrollbar {
-  background: #2A2A2A;
-  height: calc(100% - 20px);
-}
-.dark-mode much-text::-webkit-scrollbar-thumb {
-  background: #707070;
-}
-.dark-mode much-text::-webkit-scrollbar-corner {
-  background: #2A2A2A;
-}
-much-text::part(active-line) {
-  backdrop-filter: brightness(150%);
-}
-much-text::part(caret) {
-  border-left: 2px solid #EFECEF;
-}
-much-text::part(line-selection) {
-  background: #ACCEF7;
-}
-/* markdown-like highlighting */
-much-text::part(italic) {
-  font-style: italic;
-  letter-spacing: -0.2px;
-}
-much-text::part(bold) {
-  font-weight: bold;
-  color: #AFACAF;
-  letter-spacing: -0.2px;
-}
-much-text::part(html-tag) {
-  font-weight: bold;
-  color: #CF7C1F;
-  letter-spacing: -0.2px;
-}
-much-text::part(heading-1) {
-  font-weight: bold;
-  color: #FFEEFF;
-  letter-spacing: -0.2px;
-}
-much-text::part(heading-2) {
-  font-weight: bold;
-  color: #BFBCBF;
-  letter-spacing: -0.2px;
-}
-much-text::part(code) {
-/*  background: linear-gradient(to right, #44404400 0.5ch, #000000 1ch, #000000 calc(100% - 1ch), #44404400 calc(100% - 0.5ch));*/
-  color:      #FEFE5E;
-}
-
-/* splash screen */
-#splash {
-  z-index: 1;
-  position: absolute;
-  left: 0;
-  width: 100vw;
-  top: 0;
-  height: 100vh;
-  background: #2A2A2A;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-#splash .error {
-  display: none;
-  width: 50%;
-  max-width: 500px;
-  min-width: 300px;
-}
-</style>
+  <link rel='stylesheet' href='demo.css' />
 <script>
 'use strict'
 let DEBUG = false
@@ -161,21 +23,23 @@ let readmePromise = loadReadme()
 window.onload = async () => {
   let enableAnnotator = true
 
-  eInput               = document.querySelector('much-text')
-  const eSplash        = document.querySelector('#splash')
-  const eError         = document.querySelector('#splash .error')
-  const eExample       = document.querySelector('#example')
-  const eWrapMode      = document.querySelector('#panel select[name="wrap"]')
-  const eLineNums      = document.querySelector('#panel select[name="line-nums"]')
-  const eAltLines      = document.querySelector('#panel select[name="line-contrast"]')
-  const eReadOnly      = document.querySelector('#panel select[name="read-only"]')
-  const eDisabled      = document.querySelector('#panel select[name="disabled"]')
-  const eCols          = document.querySelector('#panel input[name="cols"]')
-  const eAnnotator     = document.querySelector('#panel select[name="annotator"]')
-  const eShowBoundary  = document.querySelector('#panel select[name="show-boundary"]')
-  const eRowNavigation = document.querySelector('#panel select[name="row-navigation"]')
-  const eEOLNavigation = document.querySelector('#panel select[name="eol-navigation"]')
-  const eUndoDepth     = document.querySelector('#panel input[name="undo-depth"]')
+  eInput                  = document.querySelector('much-text')
+  const eSplash           = document.querySelector('#splash')
+  const eError            = document.querySelector('#splash .error')
+  const eExample          = document.querySelector('#example')
+  const eWrapMode         = document.querySelector('#panel select[name="wrap"]')
+  const eLineNums         = document.querySelector('#panel select[name="line-nums"]')
+  const eAltLines         = document.querySelector('#panel select[name="line-contrast"]')
+  const eReadOnly         = document.querySelector('#panel select[name="read-only"]')
+  const eDisabled         = document.querySelector('#panel select[name="disabled"]')
+  const eCols             = document.querySelector('#panel input[name="cols"]')
+  const eShowBoundary     = document.querySelector('#panel select[name="show-boundary"]')
+  const eRowNavigation    = document.querySelector('#panel select[name="row-navigation"]')
+  const eEOLNavigation    = document.querySelector('#panel select[name="eol-navigation"]')
+  const eUndoDepth        = document.querySelector('#panel input[name="undo-depth"]')
+  const eSelectionEffects = document.querySelector('#panel select[name="selection-effects"]')
+  const eAnnotator        = document.querySelector('#panel select[name="annotator"]')
+  const eTheme            = document.querySelector('#panel select[name="theme"]')
   eWrapMode.addEventListener('change', ev => {
     eInput.wrap = eWrapMode.value
     updateExample()
@@ -216,9 +80,25 @@ window.onload = async () => {
     eInput.undoDepth = Number.parseInt(eUndoDepth.value)
     updateExample()
   })
+  eSelectionEffects.addEventListener('change', ev => {
+    eInput.selectionEffects = eSelectionEffects.value
+    updateExample()
+  })
+
+
   eAnnotator.addEventListener('change', ev => {
     enableAnnotator = eAnnotator.value == 'markdown'
   })
+  eTheme.addEventListener('change', ev => {
+    switch(eTheme.value) {
+      case 'dark':
+        document.body.classList.add('dark-mode')
+        break
+      default:
+        document.body.classList.remove('dark-mode')
+    }
+  })
+  eTheme.value = 'default'
   eAnnotator.value = 'markdown'
 
 
@@ -246,6 +126,8 @@ window.onload = async () => {
       attrs.push('eol-navigation="off"')
     if(eInput.undoDepth != 100)
       attrs.push(`cols="${eInput.undoDepth}"`)
+    if(eInput.selectionEffects == 'overlay')
+      attrs.push('selection-effects="overlay"')
     eExample.innerText = `<much-text ${attrs.join(' ')}></much-text>`
   }
 
@@ -271,6 +153,7 @@ window.onload = async () => {
     eShowBoundary.value = eInput.showBoundary
     eRowNavigation.value = eInput.rowNavigation
     eEOLNavigation.value = eInput.eolNavigation
+    eSelectionEffects.value = eInput.selectionEffects
     let text = await readmePromise
     const lines = text.split('\n')
     lines.splice(2, 7)
@@ -316,6 +199,7 @@ window.onload = async () => {
   cols='80'
   show-boundary='column'
   placeholder='This is a placeholder...'
+  selection-effects='overlay'
 ></much-text>
 <div id='panel'>
   <div class='title'>much-text</div>
@@ -367,9 +251,19 @@ window.onload = async () => {
     </select>
     <label>undo-depth</label>
     <input type='text' name='undo-depth' value='100' />
+    <label>selection-effects</label>
+    <select name='selection-effects'>
+      <option>overlay</option>
+      <option>off</option>
+    </select>
   </div>
   <div class='heading'>Options</div>
   <div class='settings'>
+    <label>Theme</label>
+    <select name='theme'>
+      <option>default</option>
+      <option>dark</option>
+    </select>
     <label>Annotator</label>
     <select name='annotator'>
       <option>off</option>
