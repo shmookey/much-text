@@ -14,7 +14,7 @@
     "http-server": "^0.12.3"
   },
   "scripts": {
-    "start": "npx http-server . -p 8000",
+    "start": "npx http-server . -p 8000 -c-1",
     "test": "cypress run --browser chromium --headless"
   },
   "repository": {

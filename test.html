@@ -17,5 +17,9 @@ much-text {
   height:    75px; /* hack, should use --line-height somehow */
   width:     60px;
 }
+much-text::part(red) { color: red; }
+much-text::part(blue) { color: blue; }
+much-text::part(bold) { font-weight: bold; }
+much-text::part(italic) { font-style: italic; }
 </style>
 <much-text tabindex='0' cols='5'></much-text>

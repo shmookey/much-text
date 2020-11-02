@@ -976,6 +976,7 @@ class MuchText extends HTMLElement {
     }
   }
 
+  get annotations()       { return JSON.parse(JSON.stringify(this.ranges)) }
   get caretPosition()     { return [this.#caretLine, this.#caretColumn] }
   set caretPosition(x)    { this.#moveTo(...x) }
   get cols()              { return this.#config.cols == null ? 'auto' : this.#config.cols }
@@ -1788,6 +1789,9 @@ class MuchText extends HTMLElement {
         this.#lines[j].dirty = true
       }
     }
+
+    this.#changed.annotations = true
+    this.#scheduleRefresh()
   }
 
   clearAnnotations() {
@@ -2368,16 +2372,16 @@ class MuchText extends HTMLElement {
     style.setProperty('--boundary-left',  `calc(${margin+tBox.width}px + 0.5ch)`)
     if(wrap) {
       if(cols == null) {
-        style.setProperty('--line-width',     `${tBox.cols}ch`)
-        style.setProperty('--line-min-width', `${tBox.cols}ch`)
+        style.setProperty('--line-width',     `${tBox.cols + 0.5}ch`)
+        style.setProperty('--line-min-width', `${tBox.cols + 0.5}ch`)
       } else {
-        style.setProperty('--line-width',     `${cols}ch`)
-        style.setProperty('--line-min-width', `${cols}ch`)
+        style.setProperty('--line-width',     `${cols + 0.5}ch`)
+        style.setProperty('--line-min-width', `${cols + 0.5}ch`)
       }
-      style.setProperty('--dead-width',     `${tBox.maxWidth-tBox.width}px`)
+      style.setProperty('--dead-width',     0) // `${tBox.maxWidth-tBox.width}px`)
     } else {
       style.setProperty('--line-width',      `fit-content`)
-      style.setProperty('--line-min-width',  `${tBox.maxCols}ch`)
+      style.setProperty('--line-min-width',  `${tBox.maxCols + 0.5}ch`)
       style.setProperty('--dead-width',      `100%`)
     }
   }
@@ -2470,9 +2474,14 @@ class MuchText extends HTMLElement {
         endIdx++
         n = nextEnd - cur
       }
-      const span = createElement('span', {className: classes, part: classes})
-      span.innerText = line.chars.slice(cur, cur+n).join('')
-      line.element.appendChild(span)
+      if(classes.length > 0) {
+        const span = createElement('span', {className: classes, part: classes})
+        span.innerText = line.chars.slice(cur, cur+n).join('')
+        line.element.appendChild(span)
+      } else {
+        const text = new Text(line.chars.slice(cur, cur+n).join(''))
+        line.element.appendChild(text)
+      }
       cur += n
     }
     if(cur < line.chars.length) {
