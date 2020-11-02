@@ -371,13 +371,4 @@ describe('annotations spec', () => {
       ]))
   })
 
-  it('annotate across a soft line break', () => {
-    init('AAAAABBBBB', {wrap: 'soft'})
-      .then($e => $e[0].annotate(0, 2, 0, 9, 'red'))
-      .then(waitFrames(5))
-      .should(expectAnnotations([
-        [0, 2, 5, 'red'],
-        [1, 0, 4, 'red'],
-      ]))
-  })
 })
