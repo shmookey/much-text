@@ -1052,7 +1052,7 @@ class MuchText extends HTMLElement {
     return 1
   }
 
-  /** An ordering for ranges compatible with `Array.prototype.sort`. */
+  /** An ordering for ranges and annotations compatible with `Array.prototype.sort`. */
   static compareRanges(a, b) {
     if(a.startLine   < b.startLine)   return -1
     if(a.startLine   > b.startLine)   return  1
@@ -1780,14 +1780,16 @@ class MuchText extends HTMLElement {
 
 
     // Add to ranges list without messing up the order, don't add duplicates
-    const range = {startLine, startColumn, endLine, endColumn, cls}
-    let i = this.ranges.findIndex(r => MuchText.compareRanges(range, r) >= 0)
-    if(i == -1 || MuchText.compareRanges(range, this.ranges[i]) > 0) {
-      this.ranges.splice(i, 0, range)
-      for(let j=startLine; j<=endLine; j++) {
-        this.#lines[j].ranges.push(range)
-        this.#lines[j].dirty = true
-      }
+    const range = {startLine, startColumn, endLine, endColumn, cls, hidden: false}
+    let idx = this.ranges.findIndex(r => MuchText.compareRanges(r, range) > 0)
+    if(idx == -1) idx = this.ranges.length
+    this.ranges.splice(idx, 0, range)
+    for(let i=startLine; i<=endLine; i++) {
+      const ln = this.#lines[i] 
+      let j = ln.ranges.findIndex(x => MuchText.compareRanges(x, range) > 0)
+      if(j == -1) j = ln.ranges.length
+      ln.ranges.splice(j, 0, range)
+      ln.dirty = true
     }
 
     this.#changed.annotations = true
@@ -1797,9 +1799,11 @@ class MuchText extends HTMLElement {
   clearAnnotations() {
     this.ranges = []
     this.#lines.forEach((line,i) => {
-      line.ranges.splice(0, line.length)
+      line.ranges.splice(0, line.ranges.length)
       line.dirty = true
     })
+    this.#changed.annotations = true
+    this.#scheduleRefresh()
   }
 
   /** Efficiently replace the annotations that start in a given range.
@@ -1811,36 +1815,50 @@ class MuchText extends HTMLElement {
    */
   replaceAnnotations(region, newRanges) {
 
-    // Determine existing ranges starting in the given region
-    const oldMin = max(0, this.ranges.findIndex(r => 
-      r.startLine > region.startLine || 
-      (r.startLine == region.startLine && r.startColumn >= region.startColumn)))
-    let oldMax = this.ranges.findIndex(r => 
-      r.startLine > region.endLine ||
-      (r.startLine == region.endLine && r.startColumn > region.endColumn))
+    // Step 1: Find annotations starting in the replacement region
+    //
+    // These annotations occur as a (possibly empty) sub-list of `this.ranges`
+    // which we will call `oldRanges`, bounded by indices `oldMin` and `oldMax`
+    // such that for all `oldMin <= x < oldMax`, `this.ranges[x]` starts within
+    // `region`, and all other annotations start elsewhere.
+    //
+    // We calculate `oldMin` to be the index of the first annotation to start
+    // on or after the region's starting point, and `oldMax` to be the index of
+    // the first annotation to start on or after the region's ending point. For
+    // both values, if no such index can be found, `this.ranges.length` is used
+    // instead.
+    let oldMin = this.ranges.findIndex(r => MuchText.relativePlacement(r.startLine, r.startColumn, region) >= 0)
+    let oldMax = this.ranges.findIndex(r => MuchText.relativePlacement(r.startLine, r.startColumn, region) > 0)
+    if(oldMin == -1) oldMin = this.ranges.length
     if(oldMax == -1) oldMax = this.ranges.length
     const oldRanges = this.ranges.slice(oldMin, oldMax)
 
+    // Step 2: Diff the old and new annotation lists for the replacement region
+    //
+    // Some of the annotations in the replacement list may be identical to
+    // annotations that are already applied. We are only interested in those
+    // that occur in one list but not the other. We will construct two lists
+    // `insertions` and `deletions` to keep track of annotations being added
+    // to or removed from `this.ranges`, which we will use to update all of
+    // the affected lines in the next step.
+    //
+    // Using two markers `i` and `j` to keep track of our place in `newRanges`
+    // and `oldRanges` respectively, we iterate over the pair of lists by
+    // comparing the sort-order of `newRanges[i]` and `oldRanges[j]`. A lower
+    // sort order for the `newRanges` item indicates an insertion, a higher
+    // value indicates a deletion. A third marker `c` tracks our position in
+    // `this.ranges`.
+    const insertions = []
+    const deletions = []
     let i = 0      // index into newRanges
     let j = 0      // index into oldRanges
     let c = oldMin // index into live ranges
-
-    
-    for(let k=region.startLine; k<=min(this.#lines.length-1, region.endLine); k++)
-      this.#lines[k].ranges = this.#lines[k].ranges.filter(r =>
-        r.startLine < region.startLine ||
-        (r.startLine == region.startLine && r.startColumn < region.startColumn) ||
-        r.startLine > region.endLine ||
-        (r.startLine == region.endLine && r.startColumn > region.endColumn) 
-      )
-    
     while(i < newRanges.length || j < oldRanges.length) {
       let rNew     = newRanges[i]
       let rOld     = oldRanges[j]
       let purgeOld = false
       let addNew   = false
       let gotMatch = false
-
       if(!rNew)      purgeOld = true
       else if(!rOld) addNew   = true
       else {
@@ -1849,31 +1867,90 @@ class MuchText extends HTMLElement {
         else if(cmp == 0) gotMatch = true
         else              addNew   = true
       }
-
       if(purgeOld) {
-        for(let k = rOld.startLine; k <= rOld.endLine; k++) {
-          const line = this.#lines[k]
-          if(k > region.endLine) line.ranges.splice(line.ranges.indexOf(rOld), 1)
-          if(!rOld.hidden)       line.dirty = true
-        }
         this.ranges.splice(c, 1)
+        deletions.push(rOld)
         j++
       } else if(addNew) {
-        for(let k = rNew.startLine; k <= rNew.endLine; k++) {
-          const line = this.#lines[k]
-          line.ranges.push(rNew)
-          if(!rNew.hidden) line.dirty = true
-        }
         this.ranges.splice(c, 0, rNew)
-        i++ ; c++
+        insertions.push(rNew)
+        i++
+        c++
       } else if(gotMatch) {
-        for(let k = rOld.startLine; k <= rOld.endLine; k++) {
-          this.#lines[k].ranges.push(rOld)
-          // TODO: copy over other details potentially?
-        }
-        i++ ; j++ ; c++
+        i++
+        j++
+        c++
       }
     }
+
+    // Step 3: Mark affected lines as dirty
+    for(let ann of deletions) {
+      for(let i=ann.startLine; i<=ann.endLine; i++) {
+        const ln = this.#lines[i]
+        const j = ln.ranges.indexOf(ann)
+        if(j == -1) console.info('Line annotation consistency check failure. This is a bug in much-text! I would be grateful if you could let me know about it on the much-text issue tracker at http://github.com/shmookey/much-text/issues')
+        else ln.ranges.splice(j, 1)
+        if(!ann.hidden) ln.dirty = true
+      }
+    }
+    for(let ann of insertions) {
+      for(let i=ann.startLine; i<=ann.endLine; i++) {
+        const ln = this.#lines[i]
+        let j = ln.ranges.findIndex(x => MuchText.compareRanges(x, ann) > 0)
+        if(j == -1) j = ln.ranges.length
+        ln.ranges.splice(j, 0, ann)
+        if(!ann.hidden) ln.dirty = true
+      }
+    }
+
+    //for(let k=region.startLine; k<=min(this.#lines.length-1, region.endLine); k++)
+    //  this.#lines[k].ranges = this.#lines[k].ranges.filter(r =>
+    //    r.startLine < region.startLine ||
+    //    (r.startLine == region.startLine && r.startColumn < region.startColumn) ||
+    //    r.startLine > region.endLine ||
+    //    (r.startLine == region.endLine && r.startColumn > region.endColumn) 
+    //  )
+    //
+    //while(i < newRanges.length || j < oldRanges.length) {
+    //  let rNew     = newRanges[i]
+    //  let rOld     = oldRanges[j]
+    //  let purgeOld = false
+    //  let addNew   = false
+    //  let gotMatch = false
+
+    //  if(!rNew)      purgeOld = true
+    //  else if(!rOld) addNew   = true
+    //  else {
+    //    let cmp = MuchText.compareRanges(rOld, rNew)
+    //    if(cmp < 0)       purgeOld = true
+    //    else if(cmp == 0) gotMatch = true
+    //    else              addNew   = true
+    //  }
+
+    //  if(purgeOld) {
+    //    for(let k = rOld.startLine; k <= rOld.endLine; k++) {
+    //      const line = this.#lines[k]
+    //      if(k > region.endLine) line.ranges.splice(line.ranges.indexOf(rOld), 1)
+    //      if(!rOld.hidden)       line.dirty = true
+    //    }
+    //    this.ranges.splice(c, 1)
+    //    j++
+    //  } else if(addNew) {
+    //    for(let k = rNew.startLine; k <= rNew.endLine; k++) {
+    //      const line = this.#lines[k]
+    //      line.ranges.push(rNew)
+    //      if(!rNew.hidden) line.dirty = true
+    //    }
+    //    this.ranges.splice(c, 0, rNew)
+    //    i++ ; c++
+    //  } else if(gotMatch) {
+    //    for(let k = rOld.startLine; k <= rOld.endLine; k++) {
+    //      this.#lines[k].ranges.push(rOld)
+    //      // TODO: copy over other details potentially?
+    //    }
+    //    i++ ; j++ ; c++
+    //  }
+    //}
 
     this.#changed.annotations = true
     this.#scheduleRefresh()
