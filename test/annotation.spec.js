@@ -43,8 +43,6 @@ describe('annotations spec', () => {
     }).type('{leftArrow}')
   }
 
-
- 
   it('annotate part of a line', () => {
     init('ABCDE')
       .then($e => $e[0].annotate(0, 1, 0, 4, 'red'))
@@ -593,9 +591,158 @@ describe('annotations spec', () => {
         [1, 3, 1, 5, 'bold', false],
       ]))
   })
+
+  it('delete a character before an annotation starting and ending on the same line', () => { 
+    init('AAAAA')
+      .then(async ([e]) => {
+        e.annotate(0, 2, 0, 4, 'red')
+        await waitFrames(5)()
+        e.deleteRange({startLine: 0, startColumn: 0, endLine: 0, endColumn: 1})
+        await waitFrames(5)()
+      })
+      .should(expectAnnotations([
+        [0, 1, 3, 'red'],
+      ]))
+      .should(expectInternalAnnotations([
+        [0, 1, 0, 3, 'red', false],
+      ]))
+  })
+  it('delete a character before an annotation starting on the same line', () => {
+    init('AAAAA\nBBBBB')
+      .then(async ([e]) => {
+        e.annotate(0, 2, 1, 4, 'red')
+        await waitFrames(5)()
+        e.deleteRange({startLine: 0, startColumn: 0, endLine: 0, endColumn: 1})
+        await waitFrames(5)()
+      })
+      .should(expectAnnotations([
+        [0, 1, 4, 'red'],
+        [1, 0, 4, 'red'],
+      ]))
+      .should(expectInternalAnnotations([
+        [0, 1, 1, 4, 'red', false],
+      ]))
+  })
+  it('delete a character inside an annotation ending on the same line', () => {
+    init('AAAAA\nBBBBB')
+      .then(async ([e]) => {
+        e.annotate(0, 2, 1, 4, 'red')
+        await waitFrames(5)()
+        e.deleteRange({startLine: 1, startColumn: 0, endLine: 1, endColumn: 1})
+        await waitFrames(5)()
+      })
+      .should(expectAnnotations([
+        [0, 2, 5, 'red'],
+        [1, 0, 3, 'red'],
+      ]))
+      .should(expectInternalAnnotations([
+        [0, 2, 1, 3, 'red', false],
+      ]))
+  })
+  it('delete a character inside an annotation not starting or ending on the same line', () => {
+    init('AAAAA\nBBBBB\nCCCCC')
+      .then(async ([e]) => {
+        e.annotate(0, 2, 2, 4, 'red')
+        await waitFrames(5)()
+        e.deleteRange({startLine: 1, startColumn: 0, endLine: 1, endColumn: 1})
+        await waitFrames(5)()
+      })
+      .should(expectAnnotations([
+        [0, 2, 5, 'red'],
+        [1, 0, 4, 'red'],
+        [2, 0, 4, 'red'],
+      ]))
+      .should(expectInternalAnnotations([
+        [0, 2, 2, 4, 'red', false],
+      ]))
+  })
+  it('delete a line break with an annotation contained within the second line', () => {
+    init('AAAAA\nBBBBB', {wrap: 'off'})
+      .then(async ([e]) => {
+        e.annotate(1, 2, 1, 4, 'red')
+        await waitFrames(5)()
+        e.deleteRange({startLine: 0, startColumn: 5, endLine: 1, endColumn: 0})
+        await waitFrames(5)()
+      })
+      .should(expectAnnotations([
+        [0, 7, 9, 'red'],
+      ]))
+      .should(expectInternalAnnotations([
+        [0, 7, 0, 9, 'red', false],
+      ]))
+  })
+  it('delete a line break with an annotation starting on the second line', () => {
+    init('AAAAA\nBBBBB\nCCCCC', {wrap: 'off'})
+      .then(async ([e]) => {
+        e.annotate(1, 2, 2, 4, 'red')
+        await waitFrames(5)()
+        e.deleteRange({startLine: 0, startColumn: 5, endLine: 1, endColumn: 0})
+        await waitFrames(5)()
+      })
+      .should(expectAnnotations([
+        [0, 7, 10, 'red'],
+        [1, 0, 4, 'red'],
+      ]))
+      .should(expectInternalAnnotations([
+        [0, 7, 1, 4, 'red', false],
+      ]))
+  })
+  it('delete a line break with an annotation ending on the second line', () => {
+    init('AAAAA\nBBBBB', {wrap: 'off'})
+      .then(async ([e]) => {
+        e.annotate(0, 2, 1, 4, 'red')
+        await waitFrames(5)()
+        e.deleteRange({startLine: 0, startColumn: 5, endLine: 1, endColumn: 0})
+        await waitFrames(5)()
+      })
+      .should(expectAnnotations([
+        [0, 2, 9, 'red'],
+      ]))
+      .should(expectInternalAnnotations([
+        [0, 2, 0, 9, 'red', false],
+      ]))
+  })
+  it('delete a line break with an annotation starting after the following line break', () => {
+    init('AAAAA\nBBBBB\nCCCCC', {wrap: 'off'})
+      .then(async ([e]) => {
+        e.annotate(2, 2, 2, 4, 'red')
+        await waitFrames(5)()
+        e.deleteRange({startLine: 0, startColumn: 5, endLine: 1, endColumn: 0})
+        await waitFrames(5)()
+      })
+      .should(expectAnnotations([
+        [1, 2, 4, 'red'],
+      ]))
+      .should(expectInternalAnnotations([
+        [1, 2, 1, 4, 'red', false],
+      ]))
+  })
+  it('delete text containing an annotation', () => {
+    init('AAAAA\nBBBBB\nCCCCC', {wrap: 'off'})
+      .then(async ([e]) => {
+        e.annotate(0, 2, 1, 3, 'red')
+        await waitFrames(5)()
+        e.deleteRange({startLine: 0, startColumn: 1, endLine: 1, endColumn: 4})
+        await waitFrames(5)()
+      })
+      .should(expectAnnotations([]))
+      .should(expectInternalAnnotations([]))
+  })
+  it('delete text which contains line breaks and is followed by an annotation on the final line', () => {
+    init('AAAAA\nBBBBB\nCCCCC', {wrap: 'off'})
+      .then(async ([e]) => {
+        e.annotate(2, 2, 2, 4, 'red')
+        await waitFrames(5)()
+        e.deleteRange({startLine: 0, startColumn: 4, endLine: 2, endColumn: 1})
+        await waitFrames(5)()
+      })
+      .should(expectAnnotations([
+        [0, 5, 7, 'red'],
+      ]))
+      .should(expectInternalAnnotations([
+        [0, 5, 0, 7, 'red', false],
+      ]))
+  })
   
-  
-  //it('replace annotations in a range with an annotation starting before and ends inside', () => { })
-  //it('replace annotations in a range with an annotation starting before and anding after ', () => { })
   //it('replace an annotation while only changing class', () => { })
 })

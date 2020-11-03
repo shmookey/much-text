@@ -1808,13 +1808,11 @@ class MuchText extends HTMLElement {
 
   /** Efficiently replace the annotations that start in a given range.
    * 
-   * `from` and `to` specify the range of lines (inclusive). The replacements
-   *  must be sorted by start position.
-   *
-   *  Note: ensure internal ranges list is kept ordered too! 
+   *  Any existing annotations that are not present in the replacement list are
+   *  removed, while new annotations are added. The replacements must be sorted
+   *  in `MuchText.compareRanges` order.
    */
   replaceAnnotations(region, newRanges) {
-
     // Step 1: Find annotations starting in the replacement region
     //
     // These annotations occur as a (possibly empty) sub-list of `this.ranges`
@@ -1902,55 +1900,6 @@ class MuchText extends HTMLElement {
         if(!ann.hidden) ln.dirty = true
       }
     }
-
-    //for(let k=region.startLine; k<=min(this.#lines.length-1, region.endLine); k++)
-    //  this.#lines[k].ranges = this.#lines[k].ranges.filter(r =>
-    //    r.startLine < region.startLine ||
-    //    (r.startLine == region.startLine && r.startColumn < region.startColumn) ||
-    //    r.startLine > region.endLine ||
-    //    (r.startLine == region.endLine && r.startColumn > region.endColumn) 
-    //  )
-    //
-    //while(i < newRanges.length || j < oldRanges.length) {
-    //  let rNew     = newRanges[i]
-    //  let rOld     = oldRanges[j]
-    //  let purgeOld = false
-    //  let addNew   = false
-    //  let gotMatch = false
-
-    //  if(!rNew)      purgeOld = true
-    //  else if(!rOld) addNew   = true
-    //  else {
-    //    let cmp = MuchText.compareRanges(rOld, rNew)
-    //    if(cmp < 0)       purgeOld = true
-    //    else if(cmp == 0) gotMatch = true
-    //    else              addNew   = true
-    //  }
-
-    //  if(purgeOld) {
-    //    for(let k = rOld.startLine; k <= rOld.endLine; k++) {
-    //      const line = this.#lines[k]
-    //      if(k > region.endLine) line.ranges.splice(line.ranges.indexOf(rOld), 1)
-    //      if(!rOld.hidden)       line.dirty = true
-    //    }
-    //    this.ranges.splice(c, 1)
-    //    j++
-    //  } else if(addNew) {
-    //    for(let k = rNew.startLine; k <= rNew.endLine; k++) {
-    //      const line = this.#lines[k]
-    //      line.ranges.push(rNew)
-    //      if(!rNew.hidden) line.dirty = true
-    //    }
-    //    this.ranges.splice(c, 0, rNew)
-    //    i++ ; c++
-    //  } else if(gotMatch) {
-    //    for(let k = rOld.startLine; k <= rOld.endLine; k++) {
-    //      this.#lines[k].ranges.push(rOld)
-    //      // TODO: copy over other details potentially?
-    //    }
-    //    i++ ; j++ ; c++
-    //  }
-    //}
 
     this.#changed.annotations = true
     this.#scheduleRefresh()
