@@ -40,7 +40,8 @@ describe('annotations spec', () => {
       for(let [k,v] of Object.entries(opts))
         $e[0].setAttribute(k,v)
       $e[0].setText(text)
-    }).type('{leftArrow}')
+    })
+    .type('{leftArrow}')
   }
 
   it('annotate part of a line', () => {
@@ -743,6 +744,5 @@ describe('annotations spec', () => {
         [0, 5, 0, 7, 'red', false],
       ]))
   })
-  
   //it('replace an annotation while only changing class', () => { })
 })

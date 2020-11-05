@@ -22,7 +22,8 @@ describe('caret spec', () => {
       for(let [k,v] of Object.entries(opts))
         $e[0].setAttribute(k,v)
       reset(text)($e)
-    }).then(waitForFrame)
+      $e[0].caretPosition = [0, 0]
+    }).then(waitFrames(5))
   }
   function moveTo(row, col) {
     return $e => { $e[0].caretPosition = [row, col] }
@@ -36,6 +37,12 @@ describe('caret spec', () => {
         requestAnimationFrame(() => resolve()))
     })
   }
+  const waitFrames = n => $e =>
+    n == 0 ? Promise.resolve($e)
+           : new Promise((resolve, reject) => 
+               requestAnimationFrame(() => resolve(waitFrames(n-1)($e)))
+             )
+
   function bePositionedAt(row, col) {
     return $e => {
       const cW   = $e[0].host.debug.charWidth
@@ -106,6 +113,26 @@ describe('caret spec', () => {
   it('advance caret column by normal typing', () => {
     init().type('A').should(beAt(0,1))
   })
+  //it('advance caret column by typing a tab', () => {
+  //  init('', {expandTab: false, tabWidth: 4})
+  //    .type('{tab}')
+  //    .should(beAt(0,4))
+  //})
+  //it('advance caret column by typing consecutive tabs', () => {
+  //  init('', {expandTab: false, tabWidth: 4})
+  //    .type('{tab}{tab}')
+  //    .should(beAt(0,8))
+  //})
+  //it('advance caret column by typing a tab with expandTab=true', () => {
+  //  init('', {expandTab: true, tabWidth: 4})
+  //    .type('{tab}')
+  //    .should(beAt(0,4))
+  //})
+  //it('advance caret column by typing consecutive tabs with expandTab=true', () => {
+  //  init('', {expandTab: true, tabWidth: 4})
+  //    .type('{tab}{tab}')
+  //    .should(beAt(0,8))
+  //})
   it('advance caret line by typing a line break', () => {
     init().type('A\n').should(beAt(1,0))
   })
@@ -324,12 +351,13 @@ describe('caret spec', () => {
       .shadow()
       .should(bePositionedAt(1,2))
   })
-  it('positioned on current line when line ends at last col with soft wrap on', () => {
-    init('AAAAA', {cols: 5, wrap: 'soft'})
-      .should(moveTo(0,5))
-      .shadow()
-      .should(bePositionedAt(0,5))
-  })
+  // i don't think this behaviour is actually desirable...
+  //it('positioned on current line when line ends at last col with soft wrap on', () => {
+  //  init('AAAAA', {cols: 5, wrap: 'soft'})
+  //    .should(moveTo(0,5))
+  //    .shadow()
+  //    .should(bePositionedAt(0,5))
+  //})
   it('positioned on next line when at last col in the middle of a soft wrapped line', () => {
     init('AAAAAA', {cols: 5, wrap: 'soft'})
       .should(moveTo(0,5))
@@ -525,5 +553,12 @@ describe('caret spec', () => {
       .should(beAt(1,2))
   })
 
+  //it('click in line after a tab character', () => {
+  //  init('', {cols: 5, wrap: 'off', expandTab: false, tabWidth: 2})
+  //    .type('{tab}{tab}AAAA')
+  //    .should(moveTo(0,0))
+  //    .then(clickPoint(0.5, 4.5))
+  //    .should(beAt(0,4))
+  //})
   
 })

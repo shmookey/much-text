@@ -11,12 +11,14 @@ describe('selection spec', () => {
     const cW    = $e[0].debug.charWidth
     const mW    = $e[0].debug.marginWidth
     const cH    = $e[0].debug.charHeight
+    console.log(cW, mW, cH)
     return Array.from(layer.childNodes)
       .flatMap(($ln, idx) => Array.from($ln.childNodes)
         .map($sel => {
           const oL    = $sel.offsetLeft
           const oW    = $sel.offsetWidth
           const oT    = $sel.offsetTop
+          console.log(oL, oW, oT)
           const start = (oL - mW) / round(cW)
           const len   = round(oW / cW)
           const row   = oT / cH
@@ -31,7 +33,8 @@ describe('selection spec', () => {
         $e[0].setAttribute(k,v)
       $e[0].setText(text)
       $e[0].scrollTo(0,0)
-    }).then(waitForFrame)
+      $e[0].caretPosition = [0, 0]
+    }).then(waitFrames(5))
   }
   function waitForFrame($e) {
     return new Promise((resolve,reject) => {
@@ -39,6 +42,11 @@ describe('selection spec', () => {
         requestAnimationFrame(() => resolve()))
     })
   }
+  const waitFrames = n => $e =>
+    n == 0 ? Promise.resolve($e)
+           : new Promise((resolve, reject) => 
+               requestAnimationFrame(() => resolve(waitFrames(n-1)($e)))
+             )
 
   function haveRows(rows) {
     return $e => {
@@ -53,7 +61,7 @@ describe('selection spec', () => {
   it('select within non-wrapped line', () => {
     init('ABCDE')
       .should($e => $e[0].selectRange(range(0,1,0,4)))
-      .then(waitForFrame)
+      .then(waitFrames(5))
       .should(haveRows([
         [0, 0, 1, 3],
       ]))
@@ -104,6 +112,13 @@ describe('selection spec', () => {
       ]))
   })
 
-
+  it('select a tab character', () => {
+    init('\tA', {expandTab: false, tabWidth: 4})
+      .should($e => $e[0].selectRange(range(0,0,0,1)))
+      .then(waitForFrame)
+      .should(haveRows([
+        [0, 0, 0, 4],
+      ]))
+  })
   
 })

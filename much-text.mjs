@@ -51,6 +51,7 @@ slot {
   --margin-width:   50px;
   --boundary-left:  0px;
   --line-height:    (15px);
+  --tab-width:      4;
   /*padding-top:     2px;*/
   user-select:     none;
   position:        relative;
@@ -66,6 +67,7 @@ slot {
   hyphens:         none;
   justify-content: flex-start;
   grid-template-columns: var(--margin-width) var(--line-width) var(--dead-width);
+  tab-size:        var(--tab-width);
 }
 #doc.disabled {
   cursor:          default;
@@ -89,6 +91,7 @@ slot {
 }
 .line {
   z-index:         1;
+  position:        relative;
 }
 .line, #placeholder {
   grid-column:     2;
@@ -203,7 +206,7 @@ slot {
  *    CARET
  */
 
-#caret {
+#caret, #char {
   display:         inline-block;
   font-family:     Consolas,Monaco,Lucida Console,Liberation Mono,DejaVu Sans Mono,Bitstream Vera Sans Mono,Courier New, monospace, serif;
   font-size:       13px;
@@ -311,6 +314,7 @@ slot {
   <div id='selection-foreground-layer'>
   </div>
   <div id='caret' part='caret'></div>
+  <div id='char'></div>
 </div>
 <slot></slot>
 `
@@ -553,6 +557,8 @@ class MuchText extends HTMLElement {
       eolNavigation : true,
       showRuler     : true,
       selectionFx   : false,
+      expandTab     : false,
+      tabWidth      : 4,    
     }
     this.#history = {
       buffer: [],
@@ -655,6 +661,7 @@ class MuchText extends HTMLElement {
       placeholder:  this.shadowRoot.querySelector('#placeholder'), 
       boundary:     this.shadowRoot.querySelector('#boundary'), 
       caret:        this.shadowRoot.querySelector('#caret'), 
+      char:         this.shadowRoot.querySelector('#char'), 
       slot:         this.shadowRoot.querySelector('slot'), 
       //ruler:        this.shadowRoot.querySelector('#ruler'), 
       //rulerPosLine: this.shadowRoot.querySelector('#ruler #position-line'), 
@@ -671,6 +678,7 @@ class MuchText extends HTMLElement {
       selectionBackgroundLayer: this.shadowRoot.querySelector('#selection-background-layer'), 
       selectionForegroundLayer: this.shadowRoot.querySelector('#selection-foreground-layer'), 
     }
+    this.#lines[0].element.append(this.#elements.caret)
     this.#elements.text.append(this.#lines[0].element,)
     this.#updateLineNumbers()
     this.#caretBlink = this.#elements.caret.animate({
@@ -718,7 +726,7 @@ class MuchText extends HTMLElement {
           }
           this.#changed.contentBox = true
           break
-        case this.#elements.caret:
+        case this.#elements.char:
           this.#charWidth = entry.borderBoxSize[0].inlineSize
           this.#charHeight = entry.borderBoxSize[0].blockSize
           this.#changed.caretSize = true
@@ -728,8 +736,9 @@ class MuchText extends HTMLElement {
       this.#scheduleRefresh()
     })
     resizeObserver.observe(this)
-    resizeObserver.observe(this.#elements.caret)
-
+    resizeObserver.observe(this.#elements.char)
+    this.#charWidth = this.#elements.char.offsetWidth
+    this.#charHeight = this.#elements.char.offsetHeight
     //this.shadowRoot.append(
     //  this.#elements.style,
     //  this.#elements.doc,
@@ -804,22 +813,23 @@ class MuchText extends HTMLElement {
                                             : this.#textBox.cols
     const line    = this.#lines[row]
     if(!line) return null
+    const width   = this.#charToColumn(row, line.chars.length)
     if(!wrap) return cH
-    return cH * max(1, ceil(line.chars.length / cols))
+    return cH * max(1, ceil(width / cols))
   }
 
   /** Get the vertical position of a visible line, relative to the textBox's bounding box. */
-  #lineOffset(row) {
-    const vis = this.#visibleRegion
-    if(row < vis.firstLine || row > vis.lastLine) return null
-    let i   = vis.firstLine
-    let top = -vis.firstLineOverflow
-    while(i<row) {
-      top += this.#lineHeight(i)
-      i++
-    }
-    return top
-  }
+  //#lineOffset(row) {
+  //  const vis = this.#visibleRegion
+  //  if(row < vis.firstLine || row > vis.lastLine) return null
+  //  let i   = vis.firstLine
+  //  let top = -vis.firstLineOverflow
+  //  while(i<row) {
+  //    top += this.#lineHeight(i)
+  //    i++
+  //  }
+  //  return top
+  //}
 
   /** Get the vertical position of a visible line, relative to the start of the document. */
   #lineDocOffset(row) {
@@ -828,6 +838,71 @@ class MuchText extends HTMLElement {
       top += this.#lineHeight(i)
     }
     return top
+  }
+
+  /** Find the column for a given character number in a line, taking tabs into account. */
+  #charToColumn(line, char) {
+    const tW = this.#config.tabWidth
+    const ln = this.#lines[line]
+    const pos = min(char, ln.chars.length)
+    let x = 0
+    let t = tW // Distance to next tab stop
+    for(let i=0; i<pos; i++) {
+      if(ln.chars[i] == '\t') {
+        x += t
+        t = tW
+      } else {
+        x += 1
+        t = t>1 ? t-1 : tW
+      }
+    }
+    return x
+  }
+
+  /** Find the character number for a given absolute column and a line number. */
+  #columnToChar(line, col) {
+    const tW = this.#config.tabWidth
+    const ln = this.#lines[line]
+    let x = 0
+    let m = 0
+    let t = tW // Distance to next tab stop
+    for(let i=0; m<col; i++) {
+      x += 1
+      if(ln.chars[i] == '\t') {
+        m += t
+        t = tW
+      } else {
+        m += 1
+        t = t>1 ? t-1 : tW
+      }
+    }
+    return x
+  }
+
+  /** Find the wrap-aware sub-row and column for a given absolute column. */
+  #subLineOffset(col) {
+    const wrap  = this.#config.lineWrap
+    const cols  = this.#config.cols
+    const width = this.#textBox.cols
+    if(!wrap)
+      return [0, col]
+    else if(cols != null)
+      return [floor(col / cols), col % cols]
+    else
+      return [floor(col / width), col % width]
+  }
+
+  /** Find the absolute column for a wrapped sub-row and relative column. */
+  #invSubLineOffset(row, col) {
+    const wrap  = this.#config.lineWrap
+    const cols  = this.#config.cols
+    const width = this.#textBox.cols
+    if(!wrap)
+      return col
+    else if(cols != null)
+      return row * cols + col
+    else
+      return row * width + col
   }
 
   /** Find the nearest line/column to a pixel coordinate in the text area. */
@@ -850,8 +925,10 @@ class MuchText extends HTMLElement {
     const cols = this.#config.cols == null ? tBox.cols : this.#config.cols
     if(y > cH) 
       col += floor(y / cH) * cols
-    col = min(col, this.#lines[row].chars.length)
-    return [row, col]
+    const colsWidth = this.#charToColumn(row, this.#lines[row].chars.length)
+    col = min(col, colsWidth)
+    const chr = this.#columnToChar(row, col)
+    return [row, chr]
   }
 
   /** Update the textBox geometry. Does not access DOM layout. */
@@ -895,7 +972,7 @@ class MuchText extends HTMLElement {
   static get observedAttributes() {
     return ['cols', 'wrap', 'line-nums', 'line-contrast', 'placeholder',
       'disabled', 'readonly', 'show-boundary', 'row-navigation', 'eol-navigation',
-      'undo-depth', 'selection-effects']
+      'undo-depth', 'selection-effects', 'expand-tab', 'tab-width']
   }
 
   attributeChangedCallback(name, old, val) {
@@ -973,6 +1050,16 @@ class MuchText extends HTMLElement {
     case 'undo-depth':
       this.#setUndoDepth(Number.parseInt(x))
       break
+    case 'expand-tab':
+      if(val == 'true')       this.#config.expandTab = true
+      else if(val == 'false') this.#config.expandTab = false
+      break
+    case 'tab-width': {
+      const x = Number.parseInt(val)
+      this.#config.tabWidth = x
+      this.#elements.doc.style.setProperty('--tab-width', x)
+      break
+    }
     }
   }
 
@@ -983,6 +1070,8 @@ class MuchText extends HTMLElement {
   set cols(x)             { this.setAttribute('cols', x) }
   get disabled()          { return this.#config.disabled }
   set disabled(x)         { this.setAttribute('disabled', x) }
+  get expandTab()         { return this.#config.expandTab }
+  set expandTab(x)        { this.setAttribute('expand-tab', x) }
   get eolNavigation()     { return this.#config.eolNavigation ? 'wrap' : 'off' }
   set eolNavigation(x)    { this.setAttribute('eol-navigation', x) }
   get form()              { return this.#internals.form; }
@@ -997,11 +1086,13 @@ class MuchText extends HTMLElement {
   set readonly(x)         { this.setAttribute('readonly', x) }
   get rowNavigation()     { return this.#config.rowNavigation ? 'row' : 'line' }
   set rowNavigation(x)    { this.setAttribute('row-navigation', x) }
-  get showBoundary()      { return this.#config.showBoundary ? 'column' : 'off' }
-  set showBoundary(x)     { this.setAttribute('show-boundary', x) }
   get selectionEffects()  { return this.#config.selectionFx ? 'overlay' : 'off' }
   set selectionEffects(x) { this.setAttribute('selection-effects', x) }
-  get type()              { return this.localName; }
+  get showBoundary()      { return this.#config.showBoundary ? 'column' : 'off' }
+  set showBoundary(x)     { this.setAttribute('show-boundary', x) }
+  get tabWidth()          { return this.#config.tabWidth }
+  set tabWidth(x)         { this.setAttribute('tab-width', x) }
+  get type()              { return this.localName }
   get undoDepth()         { return this.#config.undoDepth }
   set undoDepth(x)        { this.setAttribute('undo-depth', x) }
   get validity()          { return this.#internals.validity }
@@ -2009,17 +2100,19 @@ class MuchText extends HTMLElement {
   }
 
   #createLineBoxes(line, start, end, cls='selection') {
-    const len  = this.#lines[line].chars.length
+    const len  = this.#charToColumn(line, this.#lines[line].chars.length)
+    const startCol = this.#charToColumn(line, start)
+    const endCol = this.#charToColumn(line, end)
     const cols = this.#config.lineWrap ? (this.#config.cols ? this.#config.cols
                                                             : this.#textBox.cols)
                                        : len+1
     const buf  = []
-    let i = start
-    let r = floor(start / cols)
+    let i = startCol
+    let r = floor(startCol / cols)
     while(true) {
       const boundary = ceil((i+0.1)/cols)*cols
-      if(end <= boundary) {
-        buf.push([r, i % cols, end - i])
+      if(endCol <= boundary) {
+        buf.push([r, i % cols, endCol - i])
         break
       } else {
         buf.push([r, i % cols, boundary - i])
@@ -2525,30 +2618,43 @@ class MuchText extends HTMLElement {
   }
 
   #updateCaret() {
-    const cL        = min(this.#lines.length-1, this.#caretLine)
-    const cC        = this.#caretColumn
-    const ln        = this.#lines[cL]
-    const h         = this.#charHeight
-    const margin    = this.#marginWidth
-    const tBox      = this.#textBox
-    const top       = this.#lineDocOffset(cL) // ln.element.offsetTop // this.#lineOffset(cL)
-    const cols      = this.#config.cols
-    const wrapPoint = cols == null ? tBox.cols : cols
+    const cL = this.#caretLine
+    const cC = this.#caretColumn
+    const ln = this.#lines[cL]
+    const e  = this.#elements.caret
 
-    if(cC >= wrapPoint && this.#config.lineWrap) {
-      const n   = floor(cC / wrapPoint)
-      const rem = cC % wrapPoint
-      if(rem == 0 && cC != 0 && cC == ln.chars.length) {
-        this.#elements.caret.style.left = `calc(${margin}px + ${cC}ch)`
-        this.#elements.caret.style.top  = `${top}px` //`calc(${cL} * (1em + 1ex))`
-      } else {
-        this.#elements.caret.style.left = `calc(${margin}px + ${rem}ch)`
-        this.#elements.caret.style.top  = `${top + n*h}px` //`calc(${cL} * (1em + 1ex))`
-      }
-    } else if(ln) {
-      this.#elements.caret.style.left = `calc(${margin}px + ${cC}ch)`
-      this.#elements.caret.style.top  = `${top}px` //`calc(${cL} * (1em + 1ex))`
-    }
+    const col   = this.#charToColumn(cL, cC)
+    const [r,c] = this.#subLineOffset(col)
+    
+    e.style.left = `${c}ch`
+    e.style.top  = `calc(${r} * var(--line-height))`
+    ln.element.append(e)
+    return
+
+    //const cL        = min(this.#lines.length-1, this.#caretLine)
+    //const cC        = this.#caretColumn
+    //const ln        = this.#lines[cL]
+    //const h         = this.#charHeight
+    //const margin    = this.#marginWidth
+    //const tBox      = this.#textBox
+    //const top       = this.#lineDocOffset(cL) // ln.element.offsetTop // this.#lineOffset(cL)
+    //const cols      = this.#config.cols
+    //const wrapPoint = cols == null ? tBox.cols : cols
+
+    //if(cC >= wrapPoint && this.#config.lineWrap) {
+    //  const n   = floor(cC / wrapPoint)
+    //  const rem = cC % wrapPoint
+    //  if(rem == 0 && cC != 0 && cC == ln.chars.length) {
+    //    this.#elements.caret.style.left = `calc(${margin}px + ${cC}ch)`
+    //    this.#elements.caret.style.top  = `${top}px` //`calc(${cL} * (1em + 1ex))`
+    //  } else {
+    //    this.#elements.caret.style.left = `calc(${margin}px + ${rem}ch)`
+    //    this.#elements.caret.style.top  = `${top + n*h}px` //`calc(${cL} * (1em + 1ex))`
+    //  }
+    //} else if(ln) {
+    //  this.#elements.caret.style.left = `calc(${margin}px + ${cC}ch)`
+    //  this.#elements.caret.style.top  = `${top}px` //`calc(${cL} * (1em + 1ex))`
+    //}
 
     // Make sure the caret is not in the invisble part of its blink cycle
     this.#caretBlink.cancel()
@@ -2679,6 +2785,7 @@ class MuchText extends HTMLElement {
       case 'ArrowDown':  ev.preventDefault(); this.#keyArrowDown(ev); break
       case 'Home':       ev.preventDefault(); this.#keyHome(ev); break
       case 'End':        ev.preventDefault(); this.#keyEnd(ev); break
+      case 'Tab':        ev.preventDefault(); this.#keyTab(ev); break
       case 'KeyA':       if(isMod) { ev.preventDefault(); this.#keyModA(ev); break }
       case 'KeyC':       if(isMod) { ev.preventDefault(); this.#keyModC(ev); break }
       case 'KeyX':       if(isMod) { ev.preventDefault(); this.#keyModX(ev); break }
@@ -2766,6 +2873,21 @@ class MuchText extends HTMLElement {
       range.endColumn = 0
     }
     this.deleteRange(range, true, 'deleteContentForward')
+  }
+
+  #keyTab() {
+    if(this.#config.readOnly) return
+    const tw = this.#config.tabWidth
+    const col = this.#charToColumn(this.#caretColumn)
+    let w = tw - (col % tw)
+    if(w == 0) w = tw
+    let x = this.#config.expandTab ? Array(w).fill(' ').join('') : '\t'
+    if(this.#selection) {
+      this.replaceRange(this.#selection, x, true, 'insertText')
+      this.clearSelection()
+    } else {
+      this.insert(x, 'insertText')
+    }
   }
 
   #keyEscape(ev) {

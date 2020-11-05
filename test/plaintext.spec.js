@@ -23,7 +23,7 @@ describe('plaintext editing spec', () => {
     return $e => 
       { $e[0].deleteRange({startLine, startColumn, endLine, endColumn}) }
   }
-
+  
   it('deleteRange some characters within a line', () => {
     cy.visit('/test.html')
     init('ABCD\nEFGH\nIJKL', {cols: 5})
@@ -172,6 +172,43 @@ describe('plaintext editing spec', () => {
       .then(insertAt(1,1,'Q\nQ'))
       .should(beString('AA\nBQ\nQB\nCC'))
   })
-
-
+  
+  //it('tab key inserts spaces with expandtab=true', () => {
+  //  cy.visit('/test.html')
+  //  init('', {cols: 5, expandTab: true, tabWidth: 2})
+  //    .type('\t')
+  //    .should(beString('  '))
+  //})
+  //it('tab key inserts ascii tab with expandtab=false', () => {
+  //  cy.visit('/test.html')
+  //  init('', {cols: 5, expandTab: false})
+  //    .type('\t')
+  //    .should(beString('\t'))
+  //})
+  //it('tab key inserts 3 spaces with expandtab=true tabwidth=3', () => {
+  //  cy.visit('/test.html')
+  //  init('', {cols: 5, expandTab: true, tabWidth: 3})
+  //    .type('\t')
+  //    .should(beString('   '))
+  //})
+  //it('consecutive tabs with expandTab=false', () => {
+  //  cy.visit('/test.html')
+  //  init('', {cols: 5, expandTab: false})
+  //    .type('\t\t')
+  //    .should(beString('\t\t'))
+  //})
+  //it('consecutive tabs with expandTab=true', () => {
+  //  cy.visit('/test.html')
+  //  init('', {cols: 5, expandTab: true, tabWidth: 2})
+  //    .type('\t\t')
+  //    .should(beString('    '))
+  //})
+  //it('expandTab inserts only enough spaces to reach next tab stop', () => {
+  //  cy.visit('/test.html')
+  //  init('A', {cols: 5, expandTab: true, tabWidth: 4})
+  //    .type('\t')
+  //    .should(beString('A   '))
+  //})
+  
+  
 })
