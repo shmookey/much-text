@@ -51,8 +51,8 @@ describe('caret spec', () => {
       const vis  = $e[0].host.debug.visibleRegion
       const cBox = $e[0].querySelector('#caret').getBoundingClientRect()
       const eBox = {
-        left:   tBox.left + cW * col - vis.firstColOverflow,
-        top:    tBox.top + cH * row - vis.firstLineOverflow,
+        left:   tBox.left + cW * col - vis.firstColOverflow + 3, // 1px border + 2px padding
+        top:    tBox.top + cH * row - vis.firstLineOverflow + 3,
         width:  cW,
         height: cH,
       }
@@ -338,7 +338,6 @@ describe('caret spec', () => {
       .then(clickPoint(2.5, 2.5))
       .should(beAt(2,2))
   })
-
   it('positioned correctly when soft wrapping but not on softwrapped row', () => {
     init('AA')
       .should(moveTo(0,2))
@@ -560,5 +559,4 @@ describe('caret spec', () => {
   //    .then(clickPoint(0.5, 4.5))
   //    .should(beAt(0,4))
   //})
-  
 })
