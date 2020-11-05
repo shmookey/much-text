@@ -28,6 +28,7 @@ It is also a work in progress and some of the details described herein may be
 regarded as "aspirational". 
 
 Features:
+  - Tabs (with optional automatic conversion to spaces)
   - Line numbers
   - Annotations
 
@@ -54,11 +55,11 @@ the HTMLElement interface. Implementing all standard attributes for <textarea>
 is a work in progress. At time of writing, the following standard attributes
 are available:
 
-  cols disabled form name readonly required wrap
+  cols disabled form name placeholder readonly required wrap
 
 The following standard attributes are planned but not yet implemented:
 
-  placeholder rows
+  rows
 
 Support for these standard attributes is not currently planned:
 
@@ -167,6 +168,116 @@ stamped out - it is, in other words, a bug.
   is on wrapping and the placement of the boundary line, if enabled. Setting
   `cols='auto'` in conjunction with line wrapping will cause wrapping to occur
   at the edge of the element, for whatever width it happens to be.
+
+
+# DOM INTERFACE
+
+The MuchText DOM interface implements the same properties and methods as the
+standard HTMLTextArea interface, and extends it with support for additional
+features. Only the differences from HTMLTextArea are discussed here. The
+following standard attributes and methods are available:
+
+  cols disabled form name readonly placeholder required wrap
+
+The following standard attributes are planned but not yet implemented:
+
+  rows
+
+Support for these standard attributes is not currently planned:
+
+  autocomplete maxlength minlength spellcheck
+
+Like other DOM interfaces, MuchText provides access to the element's attributes
+as camelCase properties with values denoted in the appropriate native JavaScript
+type, such as Number for numeric values, instead of strings. The interface also
+includes methods and properties with no equivalent HTML attribute. 
+
+## Properties
+
+annotations
+  Array of annotation objects currently applied. Read-only.
+
+caretPosition
+  Current cursor position as a [line, col] integer pair.
+
+expandTab
+  Configures the behaviour of the Tab key. When true, pressing tab will insert
+  spaces to reach the next tab stop, instead of a literal tab character.
+  Default: false. 
+
+eolNavigation
+  Configures the behaviour of the left and right arrow keys at the beginnings
+  and ends of lines. If true, the cursor will continue past a line break to the
+  next line. Default: true.
+
+lineContrast
+  Enables line contrast effects, which can make it easier to distinguish line
+  breaks in the content from line wrapping. This creates an empty container
+  element behind each line and may have a performance impact. Default: false.
+
+lineNums
+  Enables line numbers displayed in the margin. Default: false.
+
+rowNavigation
+  Configures the behaviour and the up and down arrow keys on soft-wrapped lines.
+  If true, the cursor will move between visual rows on the screen when the line
+  is wrapped. Otherwise, it will move between lines, preserving the logical
+  column number. Default: true.
+
+selectionEffects
+  Enables selection contrast effects, to improve readability of selected text
+  when the background color changes. May have a performance impact on some
+  systems. Default: false.
+
+showBoundary
+  If `cols` is set to a value other than `auto`, enabling this will show a line
+  indicating the edge of the wrapping area. Default: false.
+
+tabWidth
+  Sets the number of spaces between tab stops. Default: 4.
+
+undoDepth
+  The maximum number of states in the history buffer. Default: 100.
+
+selectedRange
+  A range object specifying the extent of the current selection, or null if no
+  text is selected.
+
+
+## Instance methods
+
+debug
+nearestPosition
+setText
+insert
+insertAt
+deleteRange
+rangeLength
+getRange
+offsetOf
+replaceRange
+annotate
+clearAnnotations
+replaceAnnotations
+findExtendedRange
+setSelection
+clearSelection
+getSelection
+deleteSelection
+selectRange
+
+
+## Class methods
+
+isBetween
+isInRange
+comparePoints
+compareRanges
+mergeRanges
+isSubRange
+relativePlacement
+rangeSpan
+ensureForwards
 
 
 # LICENSE

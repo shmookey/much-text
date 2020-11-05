@@ -37,6 +37,8 @@ window.onload = async () => {
   const eRowNavigation    = document.querySelector('#panel select[name="row-navigation"]')
   const eEOLNavigation    = document.querySelector('#panel select[name="eol-navigation"]')
   const eUndoDepth        = document.querySelector('#panel input[name="undo-depth"]')
+  const eExpandTab        = document.querySelector('#panel select[name="expand-tab"]')
+  const eTabWidth         = document.querySelector('#panel input[name="tab-width"]')
   const eSelectionEffects = document.querySelector('#panel select[name="selection-effects"]')
   const eAnnotator        = document.querySelector('#panel select[name="annotator"]')
   const eTheme            = document.querySelector('#panel select[name="theme"]')
@@ -84,6 +86,14 @@ window.onload = async () => {
     eInput.selectionEffects = eSelectionEffects.value
     updateExample()
   })
+  eExpandTab.addEventListener('change', ev => {
+    eInput.expandTab = eExpandTab.value
+    updateExample()
+  })
+  eTabWidth.addEventListener('change', ev => {
+    eInput.tabWidth = Number.parseInt(eTabWidth.value)
+    updateExample()
+  })
 
 
   eAnnotator.addEventListener('change', ev => {
@@ -128,6 +138,10 @@ window.onload = async () => {
       attrs.push(`cols="${eInput.undoDepth}"`)
     if(eInput.selectionEffects == 'overlay')
       attrs.push('selection-effects="overlay"')
+    if(eInput.expandTab == true)
+      attrs.push('expand-tab="true"')
+    if(eInput.tabWidth != 4)
+      attrs.push(`tab-width="${eInput.tabWidth}"`)
     eExample.innerText = `<much-text ${attrs.join(' ')}></much-text>`
   }
 
@@ -154,6 +168,8 @@ window.onload = async () => {
     eRowNavigation.value = eInput.rowNavigation
     eEOLNavigation.value = eInput.eolNavigation
     eSelectionEffects.value = eInput.selectionEffects
+    eExpandTab.value = eInput.expandTab
+    eTabWidth.value = eInput.tabWidth
     let text = await readmePromise
     const lines = text.split('\n')
     lines.splice(2, 7)
@@ -256,6 +272,13 @@ window.onload = async () => {
       <option>overlay</option>
       <option>off</option>
     </select>
+    <label>expand-tab</label>
+    <select name='expand-tab'>
+      <option>true</option>
+      <option>false</option>
+    </select>
+    <label>tab-width</label>
+    <input type='text' name='tab-width' />
   </div>
   <div class='heading'>Options</div>
   <div class='settings'>
