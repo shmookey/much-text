@@ -2797,7 +2797,7 @@ class MuchText extends HTMLElement {
 
   #handleBlur(ev) {
     this.#isFocused = false
-    //this.clearSelection()
+    this.clearSelection()
     if(this.#elements.curLine) this.#elements.curLine.part.remove('active-line')
     if(this.#elements.curLineNum) this.#elements.curLineNum.part.remove('active-line')
     if(this.#elements.curLineOver) this.#elements.curLineOver.part.remove('active-line')
