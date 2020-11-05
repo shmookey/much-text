@@ -2805,7 +2805,7 @@ class MuchText extends HTMLElement {
 
   #handleKeyDown(ev) {
     if(ev.isComposing || ev.keyCode === 229) return
-   
+    console.log(ev) 
     const isMod = (isMac && ev.metaKey) || (!isMac && ev.ctrlKey)
     switch(ev.code) {
       case 'Enter':      ev.preventDefault(); this.#keyEnter(ev); break
@@ -2819,15 +2819,15 @@ class MuchText extends HTMLElement {
       case 'Home':       ev.preventDefault(); this.#keyHome(ev); break
       case 'End':        ev.preventDefault(); this.#keyEnd(ev); break
       case 'Tab':        ev.preventDefault(); this.#keyTab(ev); break
+      case 'CapsLock':
+      case 'PageUp':
+      case 'PageDown': break
       case 'KeyA':       if(isMod) { ev.preventDefault(); this.#keyModA(ev); break }
       case 'KeyC':       if(isMod) { ev.preventDefault(); this.#keyModC(ev); break }
       case 'KeyX':       if(isMod) { ev.preventDefault(); this.#keyModX(ev); break }
       case 'KeyV':       if(isMod) { ev.preventDefault(); this.#keyModV(ev); break }
       case 'KeyZ':       if(isMod) { ev.preventDefault(); this.#keyModZ(ev); break }
       case 'KeyY':       if(isMod) { ev.preventDefault(); this.#keyModY(ev); break }
-      case 'CapsLock':
-      case 'PageUp':
-      case 'PageDown':   break
       default:
         if(ev.location == KeyboardEvent.DOM_KEY_LOCATION_STANDARD
            && !ev.ctrlKey) {
