@@ -28,7 +28,7 @@ const htmlSource = `
 :host {
   display:         flow-root;
   appearance:      textarea;
-  outline:          1px solid #707070;
+  border:          1px solid #707070;
   overflow:        auto auto;
   font-family:     Consolas,Monaco,Lucida Console,Liberation Mono,DejaVu Sans Mono,Bitstream Vera Sans Mono,Courier New, monospace, serif;
   font-size:       13px;
@@ -40,6 +40,7 @@ const htmlSource = `
   resize:          auto;
   cursor:          text;
   contain:         size;
+  padding:         2px;
 }
 slot {
   display:         none;
@@ -724,6 +725,7 @@ class MuchText extends HTMLElement {
             right:   this.offsetLeft + entry.contentRect.width,
             bottom:  this.offsetTop + entry.contentRect.bottom,
           }
+          console.log(entry)
           this.#changed.contentBox = true
           break
         case this.#elements.char:
@@ -939,7 +941,7 @@ class MuchText extends HTMLElement {
     const height   = cBox.height
     const maxWidth = cBox.width - margin
     const width    = this.#config.cols == null
-                     ? maxWidth
+                     ? maxWidth - this.#charWidth/2 // workaround for buggy monospace wrapping
                      : min(maxWidth, this.#config.cols * this.#charWidth)
     const tBox = {
       top:      cBox.top,
@@ -1373,6 +1375,29 @@ class MuchText extends HTMLElement {
    *                                                                         *
    ***************************************************************************/
 
+  /**  Convert a char list to a string for display in HTML.
+   *
+   * Note: this function converts tabs to spaces so that they wrap correctly,
+   * it is not meant for exporting source text.
+   */
+  #prepareText(chars, offset=0) {
+    const tW = this.#config.tabWidth
+    let t = offset % tW // Distance to next tab stop
+    if(t == 0) t = tW
+    else t = tW - t
+    return chars.map(c => {
+      if(c == '\t') {
+        offset += t
+        const spaces = Array(t).fill(' ').join('')
+        t = tW
+        return spaces
+      } else {
+        offset += 1
+        t = t>1 ? t-1 : tW
+        return c
+      }
+    }).join('')
+  }
 
   /** Replace the contents of the text area with a string. */
   setText(text, updateSlot=true) {
@@ -1460,7 +1485,7 @@ class MuchText extends HTMLElement {
     const newLines = textLines.slice(1).map((str, i) => ({
       chars:   Array.from(str),
       dirty:   true,
-      element: createElement('div', {className: 'line', innerText: str}),
+      element: createElement('div', {className: 'line', innerText: this.#prepareText(Array.from(str))}),
       ranges:  ranges.slice(),
     }))
     this.#lines.splice(row+1, 0, ...newLines)
@@ -1481,11 +1506,11 @@ class MuchText extends HTMLElement {
       tailLine = {
         chars:   rem,
         dirty:   true,
-        element: createElement('div', {className: 'line', innerText: rem.join('')}),
+        element: createElement('div', {className: 'line', innerText: this.#prepareText(rem)}),
         ranges:  last.ranges.slice(),
       }
       this.#lines.splice(row + nLines + 1, 0, tailLine)
-      last.element.innerText = last.chars.join('')
+      last.element.innerText = this.#prepareText(last.chars)
       newLines.push(tailLine)
       newLineRegion = {
         startLine: tailPosition[0],
@@ -1626,11 +1651,11 @@ class MuchText extends HTMLElement {
       tailLine = {
         chars:   rem,
         dirty:   true,
-        element: createElement('div', {className: 'line', innerText: rem.join('')}),
+        element: createElement('div', {className: 'line', innerText: this.#prepareText(rem)}),
         ranges:  start.ranges.slice(),
       }
       this.#lines.splice(startLine + 1, 0, tailLine)
-      start.element.innerText = start.chars.join('')
+      start.element.innerText = this.#prepareText(start.chars)
       start.element.after(tailLine.element)
     }
 
@@ -2500,7 +2525,7 @@ class MuchText extends HTMLElement {
       style.setProperty('--dead-width',     0) // `${tBox.maxWidth-tBox.width}px`)
     } else {
       style.setProperty('--line-width',      `fit-content`)
-      style.setProperty('--line-min-width',  `${tBox.maxCols + 0.5}ch`)
+      style.setProperty('--line-min-width',  `${tBox.maxCols}ch`)
       style.setProperty('--dead-width',      `100%`)
     }
   }
@@ -2558,7 +2583,7 @@ class MuchText extends HTMLElement {
     domRange.deleteContents()
 
     if(line.ranges.length == 0) {
-      line.element.innerText = line.chars.join('')
+      line.element.innerText = this.#prepareText(line.chars)
       line.dirty = false
       return
     }
@@ -2572,7 +2597,8 @@ class MuchText extends HTMLElement {
       .filter(r => !(r.endLine == i && r.endColumn == 0))) // second filter unnecessary? 
     let startIdx = 0
     let endIdx = 0
-    let cur = 0
+    let cur = 0   // current char
+    let col = 0   // current column
     while(startIdx < starts.length || endIdx < ends.length) {
       const classes = Array.from(active).map(r => r.cls).join(' ')
       const nextStart = startIdx < starts.length ? starts[startIdx].startColumn : Infinity
@@ -2593,24 +2619,31 @@ class MuchText extends HTMLElement {
         endIdx++
         n = nextEnd - cur
       }
+ 
+      const chars = line.chars.slice(cur, cur+n)
+      const fragment = this.#prepareText(chars, col)
+      col += fragment.length
+      
       if(classes.length > 0) {
         const span = createElement('span', {className: classes, part: classes})
-        span.innerText = line.chars.slice(cur, cur+n).join('')
+        span.innerText = fragment
         line.element.appendChild(span)
       } else {
-        const text = new Text(line.chars.slice(cur, cur+n).join(''))
-        line.element.appendChild(text)
+        const textNode = new Text(fragment)
+        line.element.appendChild(textNode)
       }
       cur += n
     }
     if(cur < line.chars.length) {
       const classes = Array.from(active).map(r => r.cls).join(' ')
+      const chars = line.chars.slice(cur, line.chars.length)
+      const fragment = this.#prepareText(chars, col)
       if(classes.length > 0) {
         const span = createElement('span', {className: classes, part: classes})
-        span.innerText = line.chars.slice(cur, line.chars.length).join('')
+        span.innerText = fragment
         line.element.appendChild(span)
       } else {
-        const text = document.createTextNode(line.chars.slice(cur, line.chars.length).join(''))
+        const text = document.createTextNode(fragment)
         line.element.appendChild(text)
       }
     }
@@ -2629,7 +2662,6 @@ class MuchText extends HTMLElement {
     e.style.left = `${c}ch`
     e.style.top  = `calc(${r} * var(--line-height))`
     ln.element.append(e)
-    return
 
     //const cL        = min(this.#lines.length-1, this.#caretLine)
     //const cC        = this.#caretColumn
@@ -2765,6 +2797,7 @@ class MuchText extends HTMLElement {
 
   #handleBlur(ev) {
     this.#isFocused = false
+    //this.clearSelection()
     if(this.#elements.curLine) this.#elements.curLine.part.remove('active-line')
     if(this.#elements.curLineNum) this.#elements.curLineNum.part.remove('active-line')
     if(this.#elements.curLineOver) this.#elements.curLineOver.part.remove('active-line')
@@ -2878,7 +2911,7 @@ class MuchText extends HTMLElement {
   #keyTab() {
     if(this.#config.readOnly) return
     const tw = this.#config.tabWidth
-    const col = this.#charToColumn(this.#caretColumn)
+    const col = this.#charToColumn(this.#caretLine, this.#caretColumn)
     let w = tw - (col % tw)
     if(w == 0) w = tw
     let x = this.#config.expandTab ? Array(w).fill(' ').join('') : '\t'
