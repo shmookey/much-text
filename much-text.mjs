@@ -2825,6 +2825,9 @@ class MuchText extends HTMLElement {
       case 'KeyV':       if(isMod) { ev.preventDefault(); this.#keyModV(ev); break }
       case 'KeyZ':       if(isMod) { ev.preventDefault(); this.#keyModZ(ev); break }
       case 'KeyY':       if(isMod) { ev.preventDefault(); this.#keyModY(ev); break }
+      case 'CapsLock':
+      case 'PageUp':
+      case 'PageDown':   break
       default:
         if(ev.location == KeyboardEvent.DOM_KEY_LOCATION_STANDARD
            && !ev.ctrlKey) {
